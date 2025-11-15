@@ -9,7 +9,7 @@ contract Reputation {
     address public owner;
     mapping(address => int256) private reputation;
 
-    event ReputationChanged(address indexed who, address indexed by, int256 delta, int256 newScore);
+    event ReputationChanged(address indexed who, address indexed by, address justification, int256 delta, int256 newScore);
     event ReputationSet(address indexed who, address indexed by, int256 oldScore, int256 newScore);
 
     constructor(address rolesAddress) {
@@ -18,28 +18,28 @@ contract Reputation {
     }
 
     //Role checks
-    modifier onlyBuyer() {
-        require(roles.hasRole(roles.BUYER_ROLE(), msg.sender), "buyer only");
+    modifier onlyBuyerOrAdmin() {
+        require(roles.hasRole(roles.BUYER_ROLE(), msg.sender) || roles.hasRole(roles.ADMIN_ROLE(), msg.sender), "buyer only");
         _;
     }
 
     modifier onlyAdmin() {
-        require(roles.hasRole(roles.ADMIN_ROLE(), msg.sender), "buyer only");
+        require(roles.hasRole(roles.ADMIN_ROLE(), msg.sender), "admin only");
         _;
     }
 
 
 
     // Buyer can increase reputation
-    function award(address who) external onlyBuyer() {
+    function award(address who, address justification) external onlyBuyerOrAdmin() {
         reputation[who] += 1;
-        emit ReputationChanged(who, msg.sender, 1, reputation[who]);
+        emit ReputationChanged(who, msg.sender, justification, 1, reputation[who]);
     }
 
     // Buyer can reduce reputation
-    function penalize(address who) external onlyBuyer {
+    function penalize(address who, address justification) external onlyBuyerOrAdmin {
         reputation[who] -= 1;
-        emit ReputationChanged(who, msg.sender, -1, reputation[who]);
+        emit ReputationChanged(who, msg.sender, justification, -1, reputation[who]);
     }
 
     // Admin can set reputation

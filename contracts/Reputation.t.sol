@@ -15,6 +15,7 @@ contract ReputationTest is Test {
     address public BUYER_2 = makeAddr("buyer2");
     address public SELLER = makeAddr("seller");
     address public RANDOM_USER = makeAddr("randomUser");
+    address public JUSTIFICATION_CONTRACT = makeAddr("contract");
 
     // Deploy Roles and Reputation. Grant buyer roles via Roles contract (roles are managed by Roles.sol).
     function setUp() public {
@@ -43,7 +44,7 @@ contract ReputationTest is Test {
     function test_Buyer_CanAward() public {
         // BUYER_1 awards SELLER
         vm.prank(BUYER_1);
-        reputationContract.award(SELLER);
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
 
         assertEq(reputationContract.reputationOf(SELLER), 1, "Reputation should be +1 after award");
     }
@@ -51,7 +52,7 @@ contract ReputationTest is Test {
     function test_Buyer_CanPenalize() public {
         // BUYER_2 penalizes SELLER
         vm.prank(BUYER_2);
-        reputationContract.penalize(SELLER);
+        reputationContract.penalize(SELLER, JUSTIFICATION_CONTRACT);
 
         assertEq(reputationContract.reputationOf(SELLER), -1, "Reputation should be -1 after penalize");
     }
@@ -64,7 +65,7 @@ contract ReputationTest is Test {
 
         // Grant BUYER_ROLE to OWNER and then award
         rolesContract.grantRole(rolesContract.BUYER_ROLE(), OWNER);
-        reputationContract.award(SELLER);
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
 
         assertEq(reputationContract.reputationOf(SELLER), 1, "OWNER granted buyer role should be able to award");
         vm.stopPrank();
@@ -74,7 +75,7 @@ contract ReputationTest is Test {
     function test_RandomUser_CannotChangeReputation() public {
         vm.prank(RANDOM_USER);
         vm.expectRevert("buyer only");
-        reputationContract.award(SELLER);
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
 
         // Reputation remains unchanged
         assertEq(reputationContract.reputationOf(SELLER), 0, "Reputation must remain 0 after failed action");
@@ -91,7 +92,7 @@ contract ReputationTest is Test {
     function test_Admin_SetScoreReplacesCurrentScore() public {
         // Increase by buyer first
         vm.prank(BUYER_1);
-        reputationContract.award(SELLER); // reputation = 1
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT); // reputation = 1
 
         // OWNER (Roles admin) sets score to -10
         vm.prank(OWNER);
@@ -103,7 +104,7 @@ contract ReputationTest is Test {
     function test_NonAdmin_CannotSetScore() public {
         // BUYER_1 is not an admin; call should revert with the current revert message from onlyAdmin
         vm.prank(BUYER_1);
-        vm.expectRevert("buyer only");
+        vm.expectRevert("admin only");
         reputationContract.setScore(SELLER, 100);
     }
 }
