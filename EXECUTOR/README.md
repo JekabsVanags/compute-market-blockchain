@@ -131,3 +131,5 @@ The daemon listens on: `/tmp/executor_daemon.sock`
 - Think about the deamon's security
 - Create some tool which would allow to control the daemon
 - Make it a daemon that belongs to the user which initiated it, currently no need for a root daemon.
+- Implement zip tranfer(basically allow the program to write to some directory, zip that up and send back to the requestor)
+- Low-prio Can this be done on windows?
