@@ -1,0 +1,23 @@
+[Unit]
+Description=Executor Daemon - Code Execution Service
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/bin/executor_daemon
+PIDFile=/var/run/executor_daemon.pid
+Restart=on-failure
+RestartSec=5s
+
+# Security settings
+# Very bad idea to do root, but currently ok TODO
+User=root
+Group=root
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=executor_daemon
+
+[Install]
+WantedBy=multi-user.target
