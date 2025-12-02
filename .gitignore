@@ -1,6 +1,9 @@
 # Node modules
 /node_modules
 /BLOCKCHAIN/node_modules
+/BLOCKCHAIN/types
+/BLOCKCHAIN/cache
+/BLOCKCHAIN/artifacts
 
 # Compilation output
 /dist

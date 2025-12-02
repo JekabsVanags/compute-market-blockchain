@@ -26,6 +26,14 @@ describe("Reputation", function () {
     );
     await reputation.waitForDeployment();
 
+    const AuditRepoFactory = await ethers.getContractFactory(
+      "AuditTaxRepository"
+    );
+    const auditRepo = await AuditRepoFactory.connect(owner).deploy({
+      value: 100n,
+    });
+    await auditRepo.waitForDeployment();
+
     const hash = ethers.keccak256(ethers.toUtf8Bytes("Test"));
 
     const buyerRole = await roles.BUYER_ROLE();
@@ -36,9 +44,15 @@ describe("Reputation", function () {
     request = await RequestFactory.connect(buyer1).deploy(
       hash,
       await roles.getAddress(),
-      await reputation.getAddress()
+      await reputation.getAddress(),
+      await auditRepo.getAddress(),
+      9n,
+      { value: 10n }
     );
     await request.waitForDeployment();
+    await auditRepo
+      .connect(owner)
+      .authorizeRequest(await request.getAddress(), true);
   });
 
   it("buyer can award and ReputationChanged is emitted", async function () {

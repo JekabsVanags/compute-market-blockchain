@@ -10,19 +10,23 @@ import * as Contracts from "./index.js";
 
 declare module "@nomicfoundation/hardhat-ethers/types" {
   interface HardhatEthersHelpers extends HardhatEthersHelpersBase {
-  getContractFactory(name: 'Reputation', signerOrOptions?: ethers.Signer | FactoryOptions): Promise<Contracts.Reputation__factory>
+  getContractFactory(name: 'AuditTaxRepository', signerOrOptions?: ethers.Signer | FactoryOptions): Promise<Contracts.AuditTaxRepository__factory>
+getContractFactory(name: 'Reputation', signerOrOptions?: ethers.Signer | FactoryOptions): Promise<Contracts.Reputation__factory>
 getContractFactory(name: 'Request', signerOrOptions?: ethers.Signer | FactoryOptions): Promise<Contracts.Request__factory>
 getContractFactory(name: 'Roles', signerOrOptions?: ethers.Signer | FactoryOptions): Promise<Contracts.Roles__factory>
 
-  getContractAt(name: 'Reputation', address: string | ethers.Addressable, signer?: ethers.Signer): Promise<Contracts.Reputation>
+  getContractAt(name: 'AuditTaxRepository', address: string | ethers.Addressable, signer?: ethers.Signer): Promise<Contracts.AuditTaxRepository>
+getContractAt(name: 'Reputation', address: string | ethers.Addressable, signer?: ethers.Signer): Promise<Contracts.Reputation>
 getContractAt(name: 'Request', address: string | ethers.Addressable, signer?: ethers.Signer): Promise<Contracts.Request>
 getContractAt(name: 'Roles', address: string | ethers.Addressable, signer?: ethers.Signer): Promise<Contracts.Roles>
 
-  deployContract(name: 'Reputation', signerOrOptions?: ethers.Signer | DeployContractOptions): Promise<Contracts.Reputation>
+  deployContract(name: 'AuditTaxRepository', signerOrOptions?: ethers.Signer | DeployContractOptions): Promise<Contracts.AuditTaxRepository>
+deployContract(name: 'Reputation', signerOrOptions?: ethers.Signer | DeployContractOptions): Promise<Contracts.Reputation>
 deployContract(name: 'Request', signerOrOptions?: ethers.Signer | DeployContractOptions): Promise<Contracts.Request>
 deployContract(name: 'Roles', signerOrOptions?: ethers.Signer | DeployContractOptions): Promise<Contracts.Roles>
 
-  deployContract(name: 'Reputation', args: any[], signerOrOptions?: ethers.Signer | DeployContractOptions): Promise<Contracts.Reputation>
+  deployContract(name: 'AuditTaxRepository', args: any[], signerOrOptions?: ethers.Signer | DeployContractOptions): Promise<Contracts.AuditTaxRepository>
+deployContract(name: 'Reputation', args: any[], signerOrOptions?: ethers.Signer | DeployContractOptions): Promise<Contracts.Reputation>
 deployContract(name: 'Request', args: any[], signerOrOptions?: ethers.Signer | DeployContractOptions): Promise<Contracts.Request>
 deployContract(name: 'Roles', args: any[], signerOrOptions?: ethers.Signer | DeployContractOptions): Promise<Contracts.Roles>
 

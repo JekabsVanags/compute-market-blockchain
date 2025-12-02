@@ -6,7 +6,7 @@ import type { TypedContractEvent, TypedDeferredTopicFilter, TypedEventLog, Typed
   
 
   export interface RequestInterface extends Interface {
-    getFunction(nameOrSignature: "appointAuditor" | "appointExecutor" | "assignAuditResult" | "assignResult" | "auditor" | "auditorResultHash" | "commandHash" | "currentState" | "executor" | "faultyResult" | "getInformation" | "owner" | "reputation" | "resultHash" | "roles"): FunctionFragment;
+    getFunction(nameOrSignature: "appointAuditor" | "appointExecutor" | "assignAuditResult" | "assignResult" | "auditTaxRepository" | "auditor" | "auditorResultHash" | "commandHash" | "cost" | "currentState" | "escrowAmount" | "executor" | "faultyResult" | "getInformation" | "owner" | "reputation" | "resultHash" | "roles"): FunctionFragment;
 
     getEvent(nameOrSignatureOrTopic: "AuditorAssigned" | "AuditorResultAssigned" | "ExecutorAssigned" | "FaultyCalculationDetected" | "FaultyCalculationFixed" | "RequestFinished" | "ResultAssigned"): EventFragment;
 
@@ -14,10 +14,13 @@ import type { TypedContractEvent, TypedDeferredTopicFilter, TypedEventLog, Typed
 encodeFunctionData(functionFragment: 'appointExecutor', values: [AddressLike]): string;
 encodeFunctionData(functionFragment: 'assignAuditResult', values: [BytesLike]): string;
 encodeFunctionData(functionFragment: 'assignResult', values: [BytesLike]): string;
+encodeFunctionData(functionFragment: 'auditTaxRepository', values?: undefined): string;
 encodeFunctionData(functionFragment: 'auditor', values?: undefined): string;
 encodeFunctionData(functionFragment: 'auditorResultHash', values?: undefined): string;
 encodeFunctionData(functionFragment: 'commandHash', values?: undefined): string;
+encodeFunctionData(functionFragment: 'cost', values?: undefined): string;
 encodeFunctionData(functionFragment: 'currentState', values?: undefined): string;
+encodeFunctionData(functionFragment: 'escrowAmount', values?: undefined): string;
 encodeFunctionData(functionFragment: 'executor', values?: undefined): string;
 encodeFunctionData(functionFragment: 'faultyResult', values?: undefined): string;
 encodeFunctionData(functionFragment: 'getInformation', values?: undefined): string;
@@ -30,10 +33,13 @@ encodeFunctionData(functionFragment: 'roles', values?: undefined): string;
 decodeFunctionResult(functionFragment: 'appointExecutor', data: BytesLike): Result;
 decodeFunctionResult(functionFragment: 'assignAuditResult', data: BytesLike): Result;
 decodeFunctionResult(functionFragment: 'assignResult', data: BytesLike): Result;
+decodeFunctionResult(functionFragment: 'auditTaxRepository', data: BytesLike): Result;
 decodeFunctionResult(functionFragment: 'auditor', data: BytesLike): Result;
 decodeFunctionResult(functionFragment: 'auditorResultHash', data: BytesLike): Result;
 decodeFunctionResult(functionFragment: 'commandHash', data: BytesLike): Result;
+decodeFunctionResult(functionFragment: 'cost', data: BytesLike): Result;
 decodeFunctionResult(functionFragment: 'currentState', data: BytesLike): Result;
+decodeFunctionResult(functionFragment: 'escrowAmount', data: BytesLike): Result;
 decodeFunctionResult(functionFragment: 'executor', data: BytesLike): Result;
 decodeFunctionResult(functionFragment: 'faultyResult', data: BytesLike): Result;
 decodeFunctionResult(functionFragment: 'getInformation', data: BytesLike): Result;
@@ -194,6 +200,14 @@ decodeFunctionResult(functionFragment: 'roles', data: BytesLike): Result;
     
 
     
+    auditTaxRepository: TypedContractMethod<
+      [],
+      [string],
+      'view'
+    >
+    
+
+    
     auditor: TypedContractMethod<
       [],
       [string],
@@ -218,7 +232,23 @@ decodeFunctionResult(functionFragment: 'roles', data: BytesLike): Result;
     
 
     
+    cost: TypedContractMethod<
+      [],
+      [bigint],
+      'view'
+    >
+    
+
+    
     currentState: TypedContractMethod<
+      [],
+      [bigint],
+      'view'
+    >
+    
+
+    
+    escrowAmount: TypedContractMethod<
       [],
       [bigint],
       'view'
@@ -304,6 +334,11 @@ getFunction(nameOrSignature: 'assignResult'): TypedContractMethod<
       [void],
       'nonpayable'
     >;
+getFunction(nameOrSignature: 'auditTaxRepository'): TypedContractMethod<
+      [],
+      [string],
+      'view'
+    >;
 getFunction(nameOrSignature: 'auditor'): TypedContractMethod<
       [],
       [string],
@@ -319,7 +354,17 @@ getFunction(nameOrSignature: 'commandHash'): TypedContractMethod<
       [string],
       'view'
     >;
+getFunction(nameOrSignature: 'cost'): TypedContractMethod<
+      [],
+      [bigint],
+      'view'
+    >;
 getFunction(nameOrSignature: 'currentState'): TypedContractMethod<
+      [],
+      [bigint],
+      'view'
+    >;
+getFunction(nameOrSignature: 'escrowAmount'): TypedContractMethod<
       [],
       [bigint],
       'view'
