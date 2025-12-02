@@ -32,6 +32,9 @@ contract AuditTaxRepository {
     // update accounting before external call to avoid reentrancy issues
     totalCollected -= amount;
 
+    // cant withdraw if already did
+    authorizedRequest[msg.sender] = false;
+
     (bool success, ) = to.call{value: amount}("");
     require(success, "Transfer failed");
   }
