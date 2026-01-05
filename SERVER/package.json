@@ -1,0 +1,21 @@
+{
+  "name": "compute-market-server",
+  "version": "1.0.0",
+  "description": "Server scripts for Decentralized Compute Market",
+  "main": "src/create-task.ts",
+  "scripts": {
+    "create-task": "ts-node src/create-task.ts"
+  },
+  "keywords": ["blockchain", "ethereum", "compute-market"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ethers": "^6.13.4",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "ts-node": "^10.9.2"
+  }
+}
