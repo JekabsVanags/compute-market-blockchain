@@ -13,6 +13,11 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 
+// Make the LSP shut up about the DEFAULT_IMAGE not being set, despire make having it
+#ifndef DEFAULT_IMAGE
+#define DEFAULT_IMAGE "executor-cpu"
+#endif
+
 // The socket for communication with the daemon
 const char* SOCKET_PATH = "/tmp/executor_daemon.sock";
 // The daemons pid
@@ -61,21 +66,33 @@ void write_pid_file() {
 }
 
 // Executes the given code using the following runner(script path), outputs stdout and stder
-bool execute_via_script(const std::string& code, const char* script_path, std::string& stdout_output, std::string& stderr_output) {
+bool execute_via_script(const std::string& code, const char* script_path, std::string& stdout_output, std::string& stderr_output, std::string& zip_output) {
     char temp_filename[] = "/tmp/executor_XXXXXX";
     // Create a temp file to copy code to
     int fd = mkstemp(temp_filename);
+    fchmod(fd, 0644);
     if (fd == -1) {
         syslog(LOG_ERR, "Failed to create temporary file");
         return false;
     }
     write(fd, code.c_str(), code.length());
     close(fd);
+
+    // Create temp file path for zip output
+    char temp_zipfile[] = "/tmp/executor_zip_XXXXXX";
+    int zip_fd = mkstemp(temp_zipfile);
+    if (zip_fd == -1) {
+        syslog(LOG_ERR, "Failed to create temporary zip file");
+        unlink(temp_filename);
+        return false;
+    }
+    close(zip_fd);
     // Create pipes to capture stdout and stderr separately
     int stdout_pipe[2], stderr_pipe[2];
     if (pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1) {
         syslog(LOG_ERR, "Failed to create pipes");
         unlink(temp_filename);
+        unlink(temp_zipfile);
         return false;
     }
     pid_t pid = fork();
@@ -88,7 +105,9 @@ bool execute_via_script(const std::string& code, const char* script_path, std::s
         dup2(stderr_pipe[1], STDERR_FILENO); // Redirect stderr to pipe
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
-        execl(script_path, script_path, temp_filename, nullptr);
+        // Set the proper docker image which is being used
+        setenv("IMAGE", DEFAULT_IMAGE, 1);
+        execl(script_path, script_path, temp_filename, temp_zipfile, nullptr);
         syslog(LOG_ERR, "Failed to exec script: %s", strerror(errno));
         exit(EXIT_FAILURE);
     } else if (pid > 0) {
@@ -154,11 +173,27 @@ bool execute_via_script(const std::string& code, const char* script_path, std::s
         close(stderr_pipe[0]);
         int status;
         waitpid(pid, &status, 0); // Final wait to clean up zombie
+
+        // Read zip file if it exists
+        zip_output.clear();
+        std::ifstream zip_file(temp_zipfile, std::ios::binary);
+        if (zip_file.good()) {
+            zip_file.seekg(0, std::ios::end);
+            size_t zip_size = zip_file.tellg();
+            zip_file.seekg(0, std::ios::beg);
+            if (zip_size > 0) {
+                zip_output.resize(zip_size);
+                zip_file.read(&zip_output[0], zip_size);
+            }
+            zip_file.close();
+        }
+
         unlink(temp_filename);
+        unlink(temp_zipfile);
         if (WIFEXITED(status)) {
             int exit_code = WEXITSTATUS(status);
-            syslog(LOG_INFO, "Script executed with exit code: %d, stdout: %zu bytes, stderr: %zu bytes",
-                   exit_code, stdout_output.size(), stderr_output.size());
+            syslog(LOG_INFO, "Script executed with exit code: %d, stdout: %zu bytes, stderr: %zu bytes, zip: %zu bytes",
+                   exit_code, stdout_output.size(), stderr_output.size(), zip_output.size());
             return exit_code == 0;
         }
     } else {
@@ -168,6 +203,7 @@ bool execute_via_script(const std::string& code, const char* script_path, std::s
         close(stderr_pipe[0]);
         close(stderr_pipe[1]);
         unlink(temp_filename);
+        unlink(temp_zipfile);
         return false;
     }
     return false;
@@ -208,13 +244,14 @@ bool handle_client(int client_fd) {
     std::string code(payload.begin(), payload.end());
     syslog(LOG_INFO, "Received command - Format: %d, Size: %u", format_byte, payload_size);
     bool success = false;
-    // Prepare the output, stdout and stderr
+    // Prepare the output, stdout, stderr, and zip
     std::string stdout_output;
     std::string stderr_output;
+    std::string zip_output;
     switch (format_byte) {
         case 1:
             syslog(LOG_INFO, "Executing Python code via script");
-            success = execute_via_script(code, PYTHON_EXECUTOR_SCRIPT, stdout_output, stderr_output);
+            success = execute_via_script(code, PYTHON_EXECUTOR_SCRIPT, stdout_output, stderr_output, zip_output);
             break;
         default:
             syslog(LOG_WARNING, "Unknown format byte: %d", format_byte);
@@ -224,14 +261,14 @@ bool handle_client(int client_fd) {
     // - Status (4 bytes): 0 for success, 1 for failure
     // - Stdout size (4 bytes)
     // - Stderr size (4 bytes)
-    // - Zip size (4 bytes): 0 for now
+    // - Zip size (4 bytes)
     // - Stdout bytes
     // - Stderr bytes
-    // - Zip bytes (empty for now)
+    // - Zip bytes
     uint32_t status = success ? 0 : 1;
     uint32_t stdout_size = stdout_output.size();
     uint32_t stderr_size = stderr_output.size();
-    uint32_t zip_size = 0; // Not implemented yet
+    uint32_t zip_size = zip_output.size();
     // Convert to network byte order
     uint32_t status_net = htonl(status);
     uint32_t stdout_size_net = htonl(stdout_size);
@@ -250,7 +287,10 @@ bool handle_client(int client_fd) {
     if (stderr_size > 0) {
         send(client_fd, stderr_output.data(), stderr_size, 0);
     }
-    // Zip data would go here (not implemented)
+    // Send zip
+    if (zip_size > 0) {
+        send(client_fd, zip_output.data(), zip_size, 0);
+    }
     syslog(LOG_INFO, "Sent response - Status: %u, Stdout: %u bytes, Stderr: %u bytes, Zip: %u bytes",
            status, stdout_size, stderr_size, zip_size);
     return success;

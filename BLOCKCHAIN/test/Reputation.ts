@@ -26,6 +26,14 @@ describe("Reputation", function () {
     );
     await reputation.waitForDeployment();
 
+    const AuditRepoFactory = await ethers.getContractFactory(
+      "AuditTaxRepository"
+    );
+    const auditRepo = await AuditRepoFactory.connect(owner).deploy({
+      value: 100n,
+    });
+    await auditRepo.waitForDeployment();
+
     const hash = ethers.keccak256(ethers.toUtf8Bytes("Test"));
 
     const buyerRole = await roles.BUYER_ROLE();
@@ -36,12 +44,26 @@ describe("Reputation", function () {
     request = await RequestFactory.connect(buyer1).deploy(
       hash,
       await roles.getAddress(),
-      await reputation.getAddress()
+      await reputation.getAddress(),
+      await auditRepo.getAddress(),
+      9n,
+      { value: 10n }
     );
     await request.waitForDeployment();
+    await auditRepo
+      .connect(owner)
+      .authorizeRequest(await request.getAddress(), true);
+
+    await reputation
+      .connect(owner)
+      .authorizeBuyerOrContract(await request.getAddress(), true);
   });
 
-  it("buyer can award and ReputationChanged is emitted", async function () {
+  it("authorized can award and ReputationChanged is emitted", async function () {
+    await reputation
+      .connect(owner)
+      .authorizeBuyerOrContract(await buyer1.getAddress(), true);
+
     await expect(
       reputation
         .connect(buyer1)
@@ -59,12 +81,12 @@ describe("Reputation", function () {
     expect(await reputation.reputationOf(seller.address)).to.equal(1);
   });
 
-  it("non-buyer cannot award (reverts)", async function () {
+  it("non-authorized cannot award (reverts)", async function () {
     await expect(
       reputation
         .connect(randomUser)
         .award(seller.address, await request.getAddress())
-    ).to.be.revertedWith("buyer only");
+    ).to.be.revertedWith("authorized buyers only");
   });
 
   it("admin (roles owner) can set score", async function () {

@@ -5,11 +5,13 @@ import {Request} from "../contracts/Request.sol";
 import {Roles} from "../contracts/Roles.sol";
 import {Reputation} from "../contracts/Reputation.sol";
 import {Test} from "forge-std/Test.sol";
+import {AuditTaxRepository} from "../contracts/AuditTaxRepository.sol";
 
 contract RequestTest is Test {
     Roles public rolesContract;
     Reputation public reputationContract;
     Request public requestContract;
+    AuditTaxRepository public auditTaxRepository;
 
     // Test addresses
     address public OWNER = makeAddr("owner");
@@ -31,10 +33,18 @@ contract RequestTest is Test {
         // Deploy Reputation with Roles address (kept for compatibility but not used by Request tests)
         reputationContract = new Reputation(address(rolesContract));
 
+        //Fund
+        vm.deal(BUYER_1, 100 ether);
+        vm.deal(OWNER, 1000 ether);
+    
+
+        auditTaxRepository = (new AuditTaxRepository) {value: 1000} ();
+
         // Grant roles
         rolesContract.grantRole(rolesContract.BUYER_ROLE(), BUYER_1);
         rolesContract.grantRole(rolesContract.SELLER_ROLE(), SELLER_1);
         rolesContract.grantRole(rolesContract.SELLER_ROLE(), SELLER_2);
+
 
         vm.stopPrank();
 
@@ -49,29 +59,28 @@ contract RequestTest is Test {
 
     function test_Constructor_BuyerCanCreateRequest() public {
         vm.prank(BUYER_1);
-        Request newRequest = new Request(commandHash, address(rolesContract), address(reputationContract));
+        Request newRequest = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         assertEq(newRequest.owner(), BUYER_1, "Owner should be BUYER_1");
         assertEq(uint(newRequest.currentState()), uint(Request.State.Created), "Initial state should be Created");
     }
 
     function test_Constructor_NonBuyerCannotCreateRequest() public {
-        vm.startPrank(RANDOM_USER);
+        vm.prank(RANDOM_USER);
         vm.expectRevert("buyer only");
-        new Request(commandHash, address(rolesContract), address(reputationContract));
-        vm.stopPrank();
+        new Request (commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
     }
 
     // ============ EXECUTOR APPOINTMENT TESTS ============
 
     function test_Admin_CanAppointExecutor() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
         vm.expectEmit(true, false, false, false);
         emit Request.ExecutorAssigned(SELLER_1);
-        requestContract.appointExecutor(SELLER_1);
+        requestContract.appointExecutor(payable(SELLER_1));
         vm.stopPrank();
 
         assertEq(requestContract.executor(), SELLER_1, "Executor should be SELLER_1");
@@ -80,34 +89,34 @@ contract RequestTest is Test {
 
     function test_Admin_CannotAppointNonSeller() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
         vm.expectRevert("candidate not a seller");
-        requestContract.appointExecutor(RANDOM_USER);
+        requestContract.appointExecutor(payable(RANDOM_USER));
         vm.stopPrank();
     }
 
     function test_NonAdmin_CannotAppointExecutor() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(RANDOM_USER);
         vm.expectRevert("admin only");
-        requestContract.appointExecutor(SELLER_1);
+        requestContract.appointExecutor(payable(SELLER_1));
         vm.stopPrank();
     }
 
     function test_Admin_CannotAppointExecutorInWrongState() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
+        requestContract.appointExecutor(payable(SELLER_1));
         
         // Try to appoint executor again (already in ExecutorAssigned state)
         vm.expectRevert("Invalid state for this operation");
-        requestContract.appointExecutor(SELLER_2);
+        requestContract.appointExecutor(payable(SELLER_2));
         vm.stopPrank();
     }
 
@@ -115,14 +124,14 @@ contract RequestTest is Test {
 
     function test_Admin_CanAppointAuditor() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
+        requestContract.appointExecutor(payable(SELLER_1));
 
         vm.expectEmit(true, false, false, false);
         emit Request.AuditorAssigned(SELLER_2);
-        requestContract.appointAuditor(SELLER_2);
+        requestContract.appointAuditor(payable(SELLER_2));
         vm.stopPrank();
 
         assertEq(requestContract.auditor(), SELLER_2, "Auditor should be SELLER_2");
@@ -131,35 +140,35 @@ contract RequestTest is Test {
 
     function test_Admin_CannotAppointExecutorAsAuditor() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
+        requestContract.appointExecutor(payable(SELLER_1));
 
         vm.expectRevert("auditor cannot be executor");
-        requestContract.appointAuditor(SELLER_1);
+        requestContract.appointAuditor(payable(SELLER_1));
         vm.stopPrank();
     }
 
     function test_Admin_CannotAppointAuditorBeforeExecutor() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
         vm.expectRevert("Invalid state for this operation");
-        requestContract.appointAuditor(SELLER_2);
+        requestContract.appointAuditor(payable(SELLER_2));
         vm.stopPrank();
     }
 
     function test_Admin_CannotAppointNonSellerAsAuditor() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
+        requestContract.appointExecutor(payable(SELLER_1));
 
         vm.expectRevert("candidate not a seller");
-        requestContract.appointAuditor(RANDOM_USER);
+        requestContract.appointAuditor(payable(RANDOM_USER));
         vm.stopPrank();
     }
 
@@ -167,10 +176,10 @@ contract RequestTest is Test {
 
     function test_Executor_CanAssignResult() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.prank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
+        requestContract.appointExecutor(payable(SELLER_1));
 
         bytes32 testHash = keccak256("test_result");
 
@@ -186,10 +195,10 @@ contract RequestTest is Test {
 
     function test_NonExecutor_CannotAssignResult() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.prank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
+        requestContract.appointExecutor(payable(SELLER_1));
 
         bytes32 testHash = keccak256("test_result");
 
@@ -203,11 +212,12 @@ contract RequestTest is Test {
 
     function test_Auditor_CanApproveCorrectResult() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
-        requestContract.appointAuditor(SELLER_2);
+        requestContract.appointExecutor(payable(SELLER_1));
+        requestContract.appointAuditor(payable(SELLER_2));
+        auditTaxRepository.authorizeRequest(address(requestContract), true);
         vm.stopPrank();
 
         bytes32 testHash = keccak256("test_result");
@@ -229,11 +239,12 @@ contract RequestTest is Test {
 
     function test_Auditor_CanDetectFaultyResult() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
-        requestContract.appointAuditor(SELLER_2);
+        requestContract.appointExecutor(payable(SELLER_1));
+        requestContract.appointAuditor(payable(SELLER_2));
+        auditTaxRepository.authorizeRequest(address(requestContract), true);
         vm.stopPrank();
 
         bytes32 executorHash = keccak256("executor_result");
@@ -255,11 +266,11 @@ contract RequestTest is Test {
 
     function test_NonAuditor_CannotAssignAuditResult() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
-        requestContract.appointAuditor(SELLER_2);
+        requestContract.appointExecutor(payable(SELLER_1));
+        requestContract.appointAuditor(payable(SELLER_2));
         vm.stopPrank();
 
         bytes32 testHash = keccak256("test_result");
@@ -275,11 +286,11 @@ contract RequestTest is Test {
 
     function test_Auditor_CannotAuditInWrongState() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
-        requestContract.appointAuditor(SELLER_2);
+        requestContract.appointExecutor(payable(SELLER_1));
+        requestContract.appointAuditor(payable(SELLER_2));
         vm.stopPrank();
 
         bytes32 testHash = keccak256("test_result");
@@ -294,11 +305,12 @@ contract RequestTest is Test {
 
     function test_Admin_CanReassignExecutorAfterFault() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
-        requestContract.appointAuditor(SELLER_2);
+        requestContract.appointExecutor(payable(SELLER_1));
+        requestContract.appointAuditor(payable(SELLER_2));
+        auditTaxRepository.authorizeRequest(address(requestContract), true);
         vm.stopPrank();
 
         bytes32 executorHash = keccak256("executor_result");
@@ -312,7 +324,7 @@ contract RequestTest is Test {
 
         // Now state is back to Created, admin can reassign
         vm.prank(OWNER);
-        requestContract.appointExecutor(SELLER_2);
+        requestContract.appointExecutor(payable(SELLER_2));
 
         assertEq(requestContract.executor(), SELLER_2, "New executor should be assigned");
     }
@@ -321,11 +333,11 @@ contract RequestTest is Test {
 
     function test_GetInformation_ReturnsCorrectData() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
-        requestContract.appointAuditor(SELLER_2);
+        requestContract.appointExecutor(payable(SELLER_1));
+        requestContract.appointAuditor(payable(SELLER_2));
         vm.stopPrank();
 
         bytes32 testHash = keccak256("test_result");
@@ -357,15 +369,16 @@ contract RequestTest is Test {
 
     function test_CompleteWorkflow_HappyPath() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         // 1. Appoint executor
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
+        auditTaxRepository.authorizeRequest(address(requestContract), true);
+        requestContract.appointExecutor(payable(SELLER_1));
         assertEq(uint(requestContract.currentState()), uint(Request.State.ExecutorAssigned));
 
         // 2. Appoint auditor
-        requestContract.appointAuditor(SELLER_2);
+        requestContract.appointAuditor(payable(SELLER_2));
         vm.stopPrank();
 
         // 3. Executor submits result
@@ -383,11 +396,12 @@ contract RequestTest is Test {
 
     function test_CompleteWorkflow_WithFaultAndRetry() public {
         vm.prank(BUYER_1);
-        requestContract = new Request(commandHash, address(rolesContract), address(reputationContract));
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
 
         vm.startPrank(OWNER);
-        requestContract.appointExecutor(SELLER_1);
-        requestContract.appointAuditor(SELLER_2);
+        requestContract.appointExecutor(payable(SELLER_1));
+        requestContract.appointAuditor(payable(SELLER_2));
+        auditTaxRepository.authorizeRequest(address(requestContract), true);
         vm.stopPrank();
 
         // Executor submits wrong result
@@ -405,12 +419,94 @@ contract RequestTest is Test {
 
         // Reassign to new executor
         vm.prank(OWNER);
-        requestContract.appointExecutor(SELLER_2);
+        requestContract.appointExecutor(payable(SELLER_2));
 
         // New executor submits correct result
         vm.prank(SELLER_2);
         requestContract.assignResult(correctHash);
 
         assertEq(uint(requestContract.currentState()), uint(Request.State.ResultSubmitted));
+    }
+
+    // ============ PAYMENT TESTS ============
+
+    function test_Payments_AuditorAndExecutorReceiveFunds() public {
+        // Deploy request funded with total=10, escrow=9, tax forwarded=1
+        vm.prank(BUYER_1);
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
+
+        // Authorize request and assign participants
+        vm.startPrank(OWNER);
+        auditTaxRepository.authorizeRequest(address(requestContract), true);
+        requestContract.appointExecutor(payable(SELLER_1));
+        requestContract.appointAuditor(payable(SELLER_2));
+        vm.stopPrank();
+
+        // Ensure deterministic starting balances
+        vm.deal(SELLER_1, 0);
+        vm.deal(SELLER_2, 0);
+
+        uint256 execBefore = address(SELLER_1).balance;
+        uint256 auditorBefore = address(SELLER_2).balance;
+        uint256 repoBefore = auditTaxRepository.totalCollected();
+
+        // Executor posts result
+        bytes32 resultHash = keccak256("result_ok");
+        vm.prank(SELLER_1);
+        requestContract.assignResult(resultHash);
+
+        // Auditor posts same result -> auditor paid (from repo) and executor paid (from contract)
+        vm.prank(SELLER_2);
+        requestContract.assignAuditResult(resultHash);
+
+        uint256 execAfter = address(SELLER_1).balance;
+        uint256 auditorAfter = address(SELLER_2).balance;
+        uint256 repoAfter = auditTaxRepository.totalCollected();
+
+        // Current contract logic pays "cost" (9) to auditor and "escrow" (9) to executor.
+        assertEq(execAfter - execBefore, uint256(9), "Executor should receive escrow (9)");
+        assertEq(auditorAfter - auditorBefore, uint256(9), "Auditor should receive payment (9)");
+        assertEq(repoAfter, repoBefore - uint256(9), "Repository should have decreased by auditor payment (9)");
+    }
+
+    function test_Payments_AuditorPaidOnFaultExecutorNotPaid() public {
+        vm.prank(BUYER_1);
+        requestContract = (new Request){value: 10}(commandHash, address(rolesContract), address(reputationContract), payable(auditTaxRepository), 9);
+
+        vm.startPrank(OWNER);
+        auditTaxRepository.authorizeRequest(address(requestContract), true);
+        requestContract.appointExecutor(payable(SELLER_1));
+        requestContract.appointAuditor(payable(SELLER_2));
+        vm.stopPrank();
+
+        // Setup deterministic balances
+        vm.deal(SELLER_1, 0);
+        vm.deal(SELLER_2, 0);
+
+        uint256 execBefore = address(SELLER_1).balance;
+        uint256 auditorBefore = address(SELLER_2).balance;
+        uint256 repoBefore = auditTaxRepository.totalCollected();
+
+        // Executor posts wrong result
+        bytes32 executorHash = keccak256("executor_wrong");
+        vm.prank(SELLER_1);
+        requestContract.assignResult(executorHash);
+
+        // Auditor posts a different (correct) result -> mismatch: auditor still gets paid, executor not paid
+        bytes32 auditorHash = keccak256("auditor_correct");
+        vm.prank(SELLER_2);
+        requestContract.assignAuditResult(auditorHash);
+
+        uint256 execAfter = address(SELLER_1).balance;
+        uint256 auditorAfter = address(SELLER_2).balance;
+        uint256 repoAfter = auditTaxRepository.totalCollected();
+
+        // Auditor paid (9), executor unchanged, repo decreased by 9
+        assertEq(auditorAfter - auditorBefore, uint256(9), "Auditor should receive payment (9) on audit");
+        assertEq(execAfter, execBefore, "Executor should NOT receive payment on faulty result");
+        assertEq(repoAfter, repoBefore - uint256(9), "Repository should have decreased by auditor payment (9)");
+
+        // escrow still held in Request (executor can be reassigned and paid later)
+        assertEq(uint(requestContract.currentState()), uint(Request.State.Created), "State reset to Created after fault");
     }
 }
