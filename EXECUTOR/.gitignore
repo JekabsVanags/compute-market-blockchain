@@ -25,3 +25,6 @@ __pycache__/
 # Temporary files
 *.tmp
 .DS_Store
+
+# ZIp files of output
+*.zip

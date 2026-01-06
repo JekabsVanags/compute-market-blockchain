@@ -4,6 +4,7 @@ import socket
 import struct
 import sys
 import os
+from datetime import datetime
 
 # The socket communication path
 SOCKET_PATH = "/tmp/executor_daemon.sock"
@@ -118,6 +119,17 @@ def read_multiline():
         pass
     return '\n'.join(lines)
 
+def save_zip_output(zip_data):
+    # Save ZIP file with timestamp
+    if zip_data and len(zip_data) > 0:
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        filename = f"output-{timestamp}.zip"
+        with open(filename, 'wb') as f:
+            f.write(zip_data)
+        print(f"💾 Saved ZIP output to: {filename}")
+        return filename
+    return None
+
 def execute_file(client, filepath):
     # Execute code form file
     try:
@@ -134,6 +146,8 @@ def execute_file(client, filepath):
                 print("\033[91m", end='')  # Red color
                 print(result['stderr'].decode('utf-8', errors='replace'), end='')
                 print("\033[0m", end='')  # Reset color
+            # Save ZIP if present
+            save_zip_output(result['zip'])
             if result['status'] == 0:
                 print("✓ Execution successful")
             else:
