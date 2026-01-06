@@ -96,7 +96,65 @@ ROLES_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
 REPUTATION_CONTRACT_ADDRESS=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
 ```
 
-## Deploy a Request contract (create a task):
+## Using the server:
+
+### Option A – REST API (for frontend integration):
+
+Start the server:
+```bash
+cd SERVER
+npm start
+```
+
+Expected output example:
+```
+Server running on http://localhost:3000
+Endpoints:
+  GET  /health - Check server and blockchain status.
+  POST /tasks  - Create new task (deploy Request contract).
+```
+
+#### API Endpoints:
+
+**GET /health** - Check server status:
+```bash
+curl http://localhost:3000/health
+```
+
+Expected response example:
+```json
+{
+  "status": "ok",
+  "blockchain": {
+    "connected": true,
+    "chainId": "31337",
+    "blockNumber": 3
+  }
+}
+```
+
+**POST /tasks** - Create new task (deploy Request contract):
+```bash
+curl -X POST http://localhost:3000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"commandHash": "0x1234567890123456789012345678901234567890123456789012345678901234"}'
+```
+
+Expected response example:
+```json
+{
+  "success": true,
+  "task": {
+    "address": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+    "transactionHash": "0xa76872e305d5ca54efaa8ee33dd8a118beecc601adc4c2199a1cf0d3998c4d72",
+    "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "commandHash": "0x1234567890123456789012345678901234567890123456789012345678901234",
+    "blockNumber": 4
+  }
+}
+```
+
+### Option B: CLI script (leaving initial approach, perhaps for testing):
 
 ```bash
 cd SERVER
@@ -185,14 +243,15 @@ cd BLOCKCHAIN
 npx hardhat run scripts/deploy-core-contracts.ts --network localhost
 ```
 
-Create a task (deploy Request contract):
+Start REST API server (for frontend):
 ```bash
 cd SERVER
-npx ts-node src/create-task.ts
+npm start
 ```
 
-Or use the npm script:
+Or create a task via CLI (for misc testing):
 ```bash
+cd SERVER
 npm run create-task
 ```
 
@@ -227,7 +286,13 @@ cd SERVER
 cp .env.example .env
 # Edit .env and paste addresses.
 
-# Terminal 2 – create tasks (unlimited):
+# Terminal 2 – option A to start REST API server (for frontend):
 cd SERVER
-npx ts-node src/create-task.ts
+npm start
+# Server runs on: http://localhost:3000
+# Test with: curl http://localhost:3000/health
+
+# Terminal 2 – option B with CLI script (for misc testing):
+cd SERVER
+npm run create-task
 ```
