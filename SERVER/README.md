@@ -132,8 +132,6 @@ AUDIT_TAX_REPOSITORY_ADDRESS=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
 
 ## Using the server:
 
-### Option A – REST API (for frontend integration):
-
 Start the server:
 ```bash
 cd SERVER
@@ -435,39 +433,13 @@ compute-market-blockchain/
     └── .env.example                    # Template.
 ```
 
-## Basic commands:
+## Notes:
 
-Start blockchain (leave running):
-```bash
-cd BLOCKCHAIN
-npx hardhat node
-```
-
-Deploy core contracts (after starting blockchain):
-```bash
-cd BLOCKCHAIN
-npx hardhat run scripts/deploy-core-contracts.ts --network localhost
-```
-
-Start REST API server:
-```bash
-cd SERVER
-npm start
-```
-
-# Replication:
-
-1. Clone the repository.
-2. Follow the 4 setup steps above.
-3. Run your own local blockchain.
-
-Each person has their own isolated blockchain. Contract addresses will differ between project members (this is normal).
-
-**Note:** When restarting the Hardhat node (Ctrl+C and restart), you must:
+**Restarting the blockchain:** When you restart the Hardhat node (Ctrl+C and restart), you must:
 1. Re-deploy core contracts (step 3).
 2. Update addresses in `.env` (step 4).
 
-The local blockchain resets when you restart it.
+The local blockchain resets when you restart it (all accounts go back to 10,000 ETH).
 
 ## Workflow summary:
 
