@@ -417,64 +417,6 @@ curl -X POST http://localhost:3000/tasks/ADDRESS/finalize \
 curl http://localhost:3000/accounts | jq '.accounts[0:2]'
 ```
 
-### Option B: CLI script (leaving initial approach, perhaps for testing):
-
-```bash
-cd SERVER
-npx ts-node src/create-task.ts
-```
-
-Expected output example:
-```
-Starting task creation...
-
-Configuration loaded:
-   - Connecting to: http://127.0.0.1:8545
-   - Roles contract: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-   - Reputation contract: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
-   - Command hash: 0x1234567890123456789012345678901234567890123456789012345678901234
-
-Connecting to the local Hardhat network...
-   - Connected to network – chain ID: 31337
-   - Current block number: 3
-
-Wallet created from Hardhat test account:
-   - Wallet address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-   - Wallet balance: 9999.998273484783778955 ETH (fake testnet ETH)
-
-Contract factory created:
-   - Contract name: Request
-   - ABI loaded: 23 methods/events
-   - Bytecode size: 8179 bytes
-
-Deploying Request contract to local blockchain...
-
-Deployment transaction sent!
-   - Transaction hash: 0x2a84bc8dc35119acc99e74f15d8cc3071121dcaa042662a4dccb94d569145319
-   - Waiting for mining...
-
-Contract deployed successfully!
-Contract address: 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
-Deployed on the local Hardhat network.
-
-Verifying contract deployment...
-   - Contract owner: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-   - Expected owner: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-   - Owner match: ✅
-   - Stored command hash: 0x1234567890123456789012345678901234567890123456789012345678901234
-   - Expected command hash: 0x1234567890123456789012345678901234567890123456789012345678901234
-   - Hash match: ✅
-   - Current state: 0 (0 = Waiting for executor)
-
-Task creation complete! The Request contract is ready to use.
-
-(You can create as many tasks as you want - they\'re free on the local blockchain!)
-
-Script completed successfully!
-Run this script again to create another task (Request contract).
-
-```
-
 ## Project structure:
 
 ```
@@ -482,12 +424,13 @@ compute-market-blockchain/
 ├── BLOCKCHAIN/
 │   ├── contracts/                      # Solidity smart contracts.
 │   ├── scripts/
-│   │   └── deploy-core-contracts.ts    # Deploys Roles & Reputation.
+│   │   └── deploy-core-contracts.ts    # Deploys Roles, Reputation, AuditTaxRepository.
 │   └── hardhat.config.ts
 │
 └── SERVER/
     ├── src/
-    │   └── create-task.ts              # Deploy Request contracts.
+    │   ├── blockchain-service.ts       # Blockchain interaction functions.
+    │   └── server.ts                   # REST API server.
     ├── .env                            # Your configuration (git-ignored).
     └── .env.example                    # Template.
 ```
@@ -506,16 +449,10 @@ cd BLOCKCHAIN
 npx hardhat run scripts/deploy-core-contracts.ts --network localhost
 ```
 
-Start REST API server (for frontend):
+Start REST API server:
 ```bash
 cd SERVER
 npm start
-```
-
-Or create a task via CLI (for misc testing):
-```bash
-cd SERVER
-npm run create-task
 ```
 
 # Replication:
@@ -549,13 +486,9 @@ cd SERVER
 cp .env.example .env
 # Edit .env and paste addresses.
 
-# Terminal 2 – option A to start REST API server (for frontend):
+# Terminal 2 – start REST API server:
 cd SERVER
 npm start
 # Server runs on: http://localhost:3000
 # Test with: curl http://localhost:3000/health
-
-# Terminal 2 – option B with CLI script (for misc testing):
-cd SERVER
-npm run create-task
 ```
