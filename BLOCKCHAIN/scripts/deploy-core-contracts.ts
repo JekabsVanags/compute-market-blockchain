@@ -55,6 +55,17 @@ async function main() {
   console.log("Reputation deployed to:", reputationAddress);
   console.log("");
 
+  // 3. Deploy AuditTaxRepository contract:
+  console.log("Deploying AuditTaxRepository contract...");
+
+  const AuditTaxRepositoryFactory = await ethers.getContractFactory("AuditTaxRepository");
+  const auditTaxRepository = await AuditTaxRepositoryFactory.deploy();
+  await auditTaxRepository.waitForDeployment();
+
+  const auditTaxRepositoryAddress = await auditTaxRepository.getAddress();
+  console.log("AuditTaxRepository deployed to:", auditTaxRepositoryAddress);
+  console.log("");
+
   // Summary:
   console.log("Core contracts deployed!");
   console.log("");
@@ -62,6 +73,7 @@ async function main() {
   console.log("");
   console.log(`ROLES_CONTRACT_ADDRESS=${rolesAddress}`);
   console.log(`REPUTATION_CONTRACT_ADDRESS=${reputationAddress}`);
+  console.log(`AUDIT_TAX_REPOSITORY_ADDRESS=${auditTaxRepositoryAddress}`);
   console.log("");
 }
 
