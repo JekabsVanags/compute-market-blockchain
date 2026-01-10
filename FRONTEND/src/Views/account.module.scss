@@ -1,0 +1,26 @@
+.root {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.taskButton {
+  margin-top: 16px;
+}
+
+.errorBox{
+  display: flex;
+  flex-direction: column;
+  background-color: #780606;
+  padding: 8px 16px ;
+  border-radius: 6px;
+}
+
+.successBox {
+  display: flex;
+  flex-direction: column;
+  background-color: #2E6F40;
+  padding: 8px 16px ;
+  border-radius: 6px;
+}
