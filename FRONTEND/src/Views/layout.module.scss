@@ -14,3 +14,9 @@
   width: 100%;
   max-width: 1200px; // controls page width
 }
+
+.nav {
+  display: flex;
+  gap: 16px;
+  margin: 16px 0px 16px 100px;
+}

@@ -20,7 +20,7 @@ const Router = () => {
     <Suspense fallback={<div>Loading page…</div>}>
       <Routes>
         {/* 👇 Layout wrapper */}
-        <Route element={<Layout />}>
+        <Route element={<Layout isHealthy={isHealthy} />}>
           <Route path="/" element={<Home healthData={healthData} isHealthy={isHealthy} />} />
 
           {isHealthy && (

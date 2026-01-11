@@ -32,9 +32,12 @@ const Accounts = () => {
           ))}
         </select>
       </div>
-      <div>
+      <div style={{marginTop: 16}}>
         {account !== "" && (
-          <Link to={`/account/${account}`}>Go to account</Link>
+          <button>
+            <Link to={`/account/${account}`}>Go to account</Link>
+          </button>
+          
         )}
       </div>
     </div>

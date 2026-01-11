@@ -4,6 +4,8 @@ import { useParams } from "react-router";
 
 import style from './account.module.scss'; 
 import { useTaskPost } from "QUERIES/taskPost";
+import { useGetTasks } from "QUERIES/tasksGet";
+import Modal from "COMPONENTS/Modal";
 
 
 const Account = () => {
@@ -12,7 +14,9 @@ const Account = () => {
   const [price, setPrice] = useState<string>("");
   const [successMsg, setSuccessMsg] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [selectedTaskAddress, setSelectedTaskAddress] = useState<string | null>(null)
   const {data: accountData, isLoading} = useGetAccounts();
+  const {data: tasksData, isLoading: isTasksLoading} = useGetTasks();
 
   const postTask = useTaskPost(); 
 
@@ -33,7 +37,6 @@ const Account = () => {
         console.log("ERROR", error);
         const parsedError = error?.response?.data?.error ?? "Unknown Error";
         setError(parsedError);
-        // setTimeout((() => {setError("");}), 5000);
       }
     })
   }
@@ -48,17 +51,28 @@ const Account = () => {
       (account) => account.index === accountIndex
     ) ?? null
   }, [accountData, id])
+
+  const accountTasks = useMemo(() => {
+    if (!tasksData || !id) return null
+
+    const accountIndex = Number(id)
+    if (Number.isNaN(accountIndex)) return null
+
+    return tasksData.tasks.filter(
+      (task) => task.ownerAccountIndex === accountIndex
+    ) ?? null
+  }, [tasksData, id])
   
 
-  if (isLoading || !accountData || !account) {
-    return <div>d</div>
+  if (isLoading || !accountData || !account || isTasksLoading || !accountTasks || !tasksData) {
+    return <div>Loading data</div>
   }
 
-  console.log("ID", account);
+  console.log("ID", accountTasks);
   
   return (
     <div className={style.root}>
-      <div>
+      <div className={style.cardRoot}>
         <div>
           <h3>Your account, id: {id}</h3>
         </div>
@@ -67,7 +81,7 @@ const Account = () => {
           <h5>Balance: {account.balance} ETC</h5>
         </div>
       </div>
-      <div>
+      <div className={style.cardRoot}>
         <div><h4>Create Task</h4></div>
         <div>
           {error !== "" && (
@@ -103,8 +117,60 @@ const Account = () => {
           </button>
         </div>
       </div>
-      <div>
+      <div style={{gridColumn: "span 2"}} className={style.cardRoot}>
         <h4>All the account tasks</h4>
+        <div className={style.tableWrapper}>
+          <table className={style.table}>
+            <thead>
+              <tr>
+                <th>Address</th>
+                <th>Owner</th>
+                <th>Price</th>
+                <th>Status</th>
+                <th>Created At</th>
+                <th>Info</th>
+                <th>Zip Download ?!?</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {accountTasks.map((task) => {
+                const date = new Date(task.createdAt)
+
+                const formatted = date.toLocaleString('lv-LV', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })
+
+                return(
+                  <>
+                    <tr key={task.address}>
+                      <td>{task.address}</td>
+                      <td>{task.owner}</td>
+                      <td>{task.price}</td>
+                      <td>{task.status}</td>
+                      <td>{formatted}</td>
+                      <td><button
+                        key={task.address}
+                        onClick={() => setSelectedTaskAddress(task.address)}
+                      >
+                        Open Info
+                      </button></td>
+                      <td>Download button ?</td>
+                    </tr>
+                  </>
+                )})}
+            </tbody>
+          </table>
+          <Modal
+            isOpen={selectedTaskAddress !== null}
+            address={selectedTaskAddress ?? ''}
+            onClose={() => setSelectedTaskAddress(null)}
+          />
+        </div>
       </div>
     </div>
   )

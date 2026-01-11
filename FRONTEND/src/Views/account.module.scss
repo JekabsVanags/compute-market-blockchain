@@ -5,6 +5,12 @@
   gap: 16px;
 }
 
+.cardRoot{
+  padding: 16px 32px;
+  border-radius: 12px;
+  background-color: #1a1a1a;
+}
+
 .taskButton {
   margin-top: 16px;
 }
@@ -23,4 +29,33 @@
   background-color: #2E6F40;
   padding: 8px 16px ;
   border-radius: 6px;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table thead th {
+  text-align: left;
+  padding: 12px;
+  font-weight: 600;
+  border-bottom: 2px solid #e5e7eb; // only header border
+}
+
+.table tbody tr {
+  &:nth-child(even) {
+    background-color: #505050; // every 2nd row
+  }
+}
+
+.table tbody th,
+.table tbody td {
+  padding: 10px 12px;
+  font-weight: normal;
 }
