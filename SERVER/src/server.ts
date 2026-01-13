@@ -10,6 +10,7 @@
  *   POST /tasks - Create new compute task (deploy Request contract).
  *   GET  /tasks - List all tasks.
  *   GET  /tasks/:address - Get specific task details.
+ *   POST /tasks/:address/assign - Seller assigns themselves to task.
  *   POST /tasks/:address/complete - Seller completes task with result.
  *   POST /tasks/:address/finalize - Buyer finalizes task and pays seller.
  */
@@ -290,6 +291,73 @@ app.get('/tasks/:address', async (req: Request, res: Response) => {
   }
 });
 
+// POST /tasks/:address/assign - Seller assigns themselves to task:
+// Updates in-memory storage for MVP purposes (in full blockchain workflow, this would call contract.appointExecutor(sellerAddress) instead).
+// Request body: { "accountIndex": 1 }
+// Response: { "success": true, "task": { ... } }
+app.post('/tasks/:address/assign', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+    const { accountIndex } = req.body;
+
+    // Validate account index:
+    const sellerAccountIndex = accountIndex !== undefined ? accountIndex : 1;
+    if (sellerAccountIndex < 0 || sellerAccountIndex >= 20) {
+      return res.status(400).json({
+        error: 'Invalid accountIndex (must be 0-19)!'
+      });
+    }
+
+    // Find task:
+    const task = tasks.get(address);
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found!'
+      });
+    }
+
+    // Validate status (can only assign tasks that are waiting):
+    if (task.status !== 'waiting') {
+      return res.status(400).json({
+        error: `Task cannot be assigned, current status: ${task.status}`
+      });
+    }
+
+    // Prevent re-assignment if already assigned:
+    if (task.executor) {
+      return res.status(400).json({
+        error: 'Task already assigned to another executor!'
+      });
+    }
+
+    // Get seller's wallet address from account index:
+    const config = getBlockchainConfig(sellerAccountIndex);
+    const sellerAddress = (await getHardhatAccounts(config.rpcUrl))[sellerAccountIndex].address;
+
+    // Update task (assign executor but keep status as 'waiting'):
+    // Status only changes to 'completed' when seller submits result.
+    task.executor = sellerAddress;
+    task.executorAccountIndex = sellerAccountIndex;
+
+    res.json({
+      success: true,
+      task: {
+        address: task.address,
+        status: task.status,
+        executor: task.executor,
+        executorAccountIndex: task.executorAccountIndex
+      }
+    });
+  } catch (error: any) {
+    console.error('Error assigning task:', error);
+
+    res.status(500).json({
+      error: 'Failed to assign task!',
+      details: error.message
+    });
+  }
+});
+
 // POST /tasks/:address/complete - Seller completes task:
 // Seller submits the computation result.
 // Request body: { "result": "...", "accountIndex": 1 }
@@ -329,14 +397,25 @@ app.post('/tasks/:address/complete', async (req: Request, res: Response) => {
       });
     }
 
-    // Get seller's wallet address from account index:
-    const config = getBlockchainConfig(sellerAccountIndex);
-    const sellerAddress = (await getHardhatAccounts(config.rpcUrl))[sellerAccountIndex].address;
+    // Check if task has been assigned to an executor:
+    // Can auto-assign during completion for MVP purposes (in full workflow must be assigned first via POST /tasks/:address/assign).
+    if (!task.executor) {
+      // Auto-assign if not already assigned:
+      const config = getBlockchainConfig(sellerAccountIndex);
+      const sellerAddress = (await getHardhatAccounts(config.rpcUrl))[sellerAccountIndex].address;
+      task.executor = sellerAddress;
+      task.executorAccountIndex = sellerAccountIndex;
+    } else {
+      // Task already assigned - verify it's the same executor:
+      if (task.executorAccountIndex !== sellerAccountIndex) {
+        return res.status(403).json({
+          error: `Task is assigned to a different executor – account #${task.executorAccountIndex})!`
+        });
+      }
+    }
 
-    // Update task:
+    // Update task status and result:
     task.status = 'completed';
-    task.executor = sellerAddress;
-    task.executorAccountIndex = sellerAccountIndex;
     task.result = result;
     task.completedAt = new Date().toISOString();
 
@@ -435,6 +514,7 @@ app.listen(PORT, () => {
   console.log(`  POST /tasks - Create new task (deploy Request contract).`);
   console.log(`  GET  /tasks - List all tasks.`);
   console.log(`  GET  /tasks/:address - Get specific task details.`);
+  console.log(`  POST /tasks/:address/assign - Seller claims task.`);
   console.log(`  POST /tasks/:address/complete - Seller completes task.`);
   console.log(`  POST /tasks/:address/finalize - Buyer finalizes and pays.`);
 });

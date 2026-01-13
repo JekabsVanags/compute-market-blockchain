@@ -2,7 +2,6 @@
  * BLOCKCHAIN SERVICE
  *
  * Reusable functions for blockchain interactions (deploy Request contracts, check connections, etc.).
- * These functions are called by both the REST API (server.ts) and CLI script (create-task.ts).
  */
 
 // Main library for interacting with Ethereum:

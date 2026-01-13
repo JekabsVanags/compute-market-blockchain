@@ -132,8 +132,6 @@ AUDIT_TAX_REPOSITORY_ADDRESS=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
 
 ## Using the server:
 
-### Option A – REST API (for frontend integration):
-
 Start the server:
 ```bash
 cd SERVER
@@ -149,6 +147,7 @@ Endpoints:
   POST /tasks - Create new task (deploy Request contract).
   GET  /tasks - List all tasks.
   GET  /tasks/:address - Get specific task details.
+  POST /tasks/:address/assign - Seller claims task.
   POST /tasks/:address/complete - Seller completes task.
   POST /tasks/:address/finalize - Buyer finalizes and pays.
 ```
@@ -281,6 +280,31 @@ Expected response example:
 }
 ```
 
+**POST /tasks/:address/assign** - seller claims task:
+```bash
+curl -X POST http://localhost:3000/tasks/0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9/assign \
+  -H "Content-Type: application/json" \
+  -d '{
+    "accountIndex": 1
+  }'
+```
+
+Parameters:
+- `accountIndex`: Seller's account index (0-19), defaults to 1.
+
+Expected response example:
+```json
+{
+  "success": true,
+  "task": {
+    "address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+    "status": "waiting",
+    "executor": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "executorAccountIndex": 1
+  }
+}
+```
+
 **POST /tasks/:address/complete** - seller completes task with result:
 ```bash
 curl -X POST http://localhost:3000/tasks/0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9/complete \
@@ -387,8 +411,9 @@ Note: Account #0 (buyer) spent ~1.06 ETH total (0.5555 ETH for task, plus gas fe
 #### Task lifecycle:
 
 1. **waiting**: Buyer creates task with POST /tasks (deploys Request contract with ETH payment).
-2. **completed**: Seller completes task with POST /tasks/:address/complete (submits result).
-3. **finalized**: Buyer finalizes task with POST /tasks/:address/finalize (ETH sent to seller).
+2. **assigned** (optional): Seller claims task with POST /tasks/:address/assign.
+3. **completed**: Seller completes task with POST /tasks/:address/complete (submits result).
+4. **finalized**: Buyer finalizes task with POST /tasks/:address/finalize (ETH sent to seller).
 
 #### Quick test sequence:
 
@@ -403,17 +428,22 @@ curl -X POST http://localhost:3000/tasks \
   -H "Content-Type: application/json" \
   -d '{"code": "import numpy as np\nresult = np.array([1,2,3]).sum()\nprint(result)", "price": "0.5", "accountIndex": 0}'
 
-# 3. Complete task (replace ADDRESS):
+# 3. Assign task to seller (optional, replace ADDRESS):
+curl -X POST http://localhost:3000/tasks/ADDRESS/assign \
+  -H "Content-Type: application/json" \
+  -d '{"accountIndex": 1}'
+
+# 4. Complete task (replace ADDRESS):
 curl -X POST http://localhost:3000/tasks/ADDRESS/complete \
   -H "Content-Type: application/json" \
   -d '{"result": "6", "accountIndex": 1}'
 
-# 4. Finalize task (replace ADDRESS):
+# 5. Finalize task (replace ADDRESS):
 curl -X POST http://localhost:3000/tasks/ADDRESS/finalize \
   -H "Content-Type: application/json" \
   -d '{}'
 
-# 5. Verify payment:
+# 6. Verify payment:
 curl http://localhost:3000/accounts | jq '.accounts[0:2]'
 ```
 
@@ -435,39 +465,13 @@ compute-market-blockchain/
     └── .env.example                    # Template.
 ```
 
-## Basic commands:
+## Notes:
 
-Start blockchain (leave running):
-```bash
-cd BLOCKCHAIN
-npx hardhat node
-```
-
-Deploy core contracts (after starting blockchain):
-```bash
-cd BLOCKCHAIN
-npx hardhat run scripts/deploy-core-contracts.ts --network localhost
-```
-
-Start REST API server:
-```bash
-cd SERVER
-npm start
-```
-
-# Replication:
-
-1. Clone the repository.
-2. Follow the 4 setup steps above.
-3. Run your own local blockchain.
-
-Each person has their own isolated blockchain. Contract addresses will differ between project members (this is normal).
-
-**Note:** When restarting the Hardhat node (Ctrl+C and restart), you must:
+**Restarting the blockchain:** When you restart the Hardhat node (Ctrl+C and restart), you must:
 1. Re-deploy core contracts (step 3).
 2. Update addresses in `.env` (step 4).
 
-The local blockchain resets when you restart it.
+The local blockchain resets when you restart it (all accounts go back to 10,000 ETH).
 
 ## Workflow summary:
 
