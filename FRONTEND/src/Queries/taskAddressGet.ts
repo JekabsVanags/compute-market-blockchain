@@ -14,6 +14,8 @@ export interface TaskAddressData {
   status: string
   blockNumber: string
   createdAt: string
+  executor?: string,
+  executorAccountIndex?: number,
 }
 
 interface TaskAddressResponse {

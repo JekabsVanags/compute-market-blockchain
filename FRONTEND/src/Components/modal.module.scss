@@ -18,6 +18,8 @@
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
   animation: scaleIn 0.15s ease-out;
   color: #000;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .title {
@@ -39,4 +41,21 @@
     transform: scale(1);
     opacity: 1;
   }
+}
+
+.errorBox{
+  display: flex;
+  flex-direction: column;
+  background-color: #780606;
+  padding: 8px 16px ;
+  border-radius: 6px;
+}
+
+.successBox {
+  display: flex;
+  flex-direction: column;
+  background-color: #2E6F40;
+  padding: 8px 16px ;
+  border-radius: 6px;
+  color: '#fff';
 }

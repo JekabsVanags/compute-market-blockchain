@@ -1,13 +1,17 @@
 import axiosClient from 'CONF/axios';
 import { useQuery } from '@tanstack/react-query';
 
-type TaskData = {
+export type TaskData = {
   address: string;
   owner: string;
   ownerAccountIndex: number;
   price: string;
-  status: string;
+  status: 'waiting' | 'completed' | 'finalized';
+  executor?: string,
+  executorAccountIndex?: number,
   createdAt: string;
+  completedAt?: string,
+  finalizedAt?: string,
 }
 
 interface Response {

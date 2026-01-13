@@ -6,6 +6,7 @@ import Layout from 'VIEWS/Layout'
 const Home = React.lazy(() => import('VIEWS/Home'))
 const Accounts = React.lazy(() => import('VIEWS/Accounts'))
 const Account = React.lazy(() => import('VIEWS/Account'))
+const Tasks = React.lazy(() => import('VIEWS/Tasks'))
 
 const Router = () => {
   const { data: healthData, isLoading } = useGetHealth()
@@ -27,6 +28,7 @@ const Router = () => {
             <>
               <Route path="/accounts" element={<Accounts/>} />
               <Route path="/account/:id" element={<Account/>} />
+              <Route path="/tasks" element={<Tasks/>} />
               {/* <Route path="/dashboard" element={<Dashboard />} /> */}
               {/* more routes */}
             </>

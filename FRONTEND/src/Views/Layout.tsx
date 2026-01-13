@@ -9,7 +9,10 @@ const Layout = ({ isHealthy }: { isHealthy: boolean }) => {
       <div className={styles.nav}>
         <Link to="/"><button>Home</button></Link>
         {isHealthy && (
-          <Link to="/accounts"><button>Accounts</button></Link>
+          <>
+            <Link to="/accounts"><button>Accounts</button></Link>
+            <Link to="/tasks"><button>Tasks</button></Link>
+          </>
         )}
       </div>
       <div className={styles.appLayout}>
