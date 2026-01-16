@@ -19,6 +19,15 @@ describe("Requests", function () {
   beforeEach(async function () {
     [owner, buyer, seller, auditor, randomUser] = await ethers.getSigners();
 
+    // Deploy AuditTaxRepository (owner is `owner`)
+    const AuditRepoFactory = await ethers.getContractFactory(
+      "AuditTaxRepository"
+    );
+    const auditRepo = await AuditRepoFactory.connect(owner).deploy({
+      value: 100n,
+    });
+    await auditRepo.waitForDeployment();
+
     // Deploy Roles
     const RolesFactory = await ethers.getContractFactory("Roles");
     roles = await RolesFactory.connect(owner).deploy();
@@ -45,9 +54,15 @@ describe("Requests", function () {
     request = await RequestFactory.connect(buyer).deploy(
       commandHash,
       roles.target,
-      reputation.target
+      reputation.target,
+      auditRepo.target,
+      9,
+      { value: 10 }
     );
     await request.waitForDeployment();
+
+    // authorize this request contract in the audit repository (owner of repo)
+    await auditRepo.connect(owner).authorizeRequest(request.target, true);
   });
 
   it("should emit events for faulty result penalization", async function () {

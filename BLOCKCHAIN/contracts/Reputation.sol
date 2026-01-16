@@ -9,6 +9,10 @@ contract Reputation {
     address public owner;
     mapping(address => int256) private reputation;
 
+    //Only allowed contracts can change reputation
+    mapping(address => bool) public authorizedRequest;
+    
+
     event ReputationChanged(address indexed who, address indexed by, address justification, int256 delta, int256 newScore);
     event ReputationSet(address indexed who, address indexed by, int256 oldScore, int256 newScore);
 
@@ -18,8 +22,8 @@ contract Reputation {
     }
 
     //Role checks
-    modifier onlyBuyerOrAdmin() {
-        require(roles.hasRole(roles.BUYER_ROLE(), msg.sender) || roles.hasRole(roles.ADMIN_ROLE(), msg.sender), "buyer only");
+    modifier onlyAuthOrAdmin() {
+        require(authorizedRequest[msg.sender] || roles.hasRole(roles.ADMIN_ROLE(), msg.sender), "authorized buyers only");
         _;
     }
 
@@ -29,6 +33,9 @@ contract Reputation {
     }
 
 
+    function authorizeBuyerOrContract(address req, bool allowed) external onlyAdmin {
+      authorizedRequest[req] = allowed;
+    }
 
     // Buyer can increase reputation
     function award(address who, address justification, int256 delta) external onlyAuthOrAdmin() {

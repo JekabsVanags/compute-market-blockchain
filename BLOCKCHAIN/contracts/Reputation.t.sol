@@ -5,6 +5,13 @@ import {Reputation} from "../contracts/Reputation.sol";
 import {Roles} from "../contracts/Roles.sol";
 import {Test} from "forge-std/Test.sol";
 
+//Fake contract to test that contracts can be set as authorized
+contract Awarder {
+    function doAward(address reputationAddr, address seller, address requestAddr) external {
+        Reputation(reputationAddr).award(seller, requestAddr);
+    }
+}
+
 contract ReputationTest is Test {
     Reputation public reputationContract;
     Roles public rolesContract;
@@ -42,6 +49,9 @@ contract ReputationTest is Test {
     }
 
     function test_Buyer_CanAward() public {
+        vm.prank(OWNER);
+        reputationContract.authorizeBuyerOrContract(BUYER_1, true);
+
         // BUYER_1 awards SELLER
         vm.prank(BUYER_1);
         reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
@@ -50,6 +60,9 @@ contract ReputationTest is Test {
     }
 
     function test_Buyer_CanPenalize() public {
+        vm.prank(OWNER);
+        reputationContract.authorizeBuyerOrContract(BUYER_2, true);
+
         // BUYER_2 penalizes SELLER
         vm.prank(BUYER_2);
         reputationContract.penalize(SELLER, JUSTIFICATION_CONTRACT);
@@ -74,7 +87,7 @@ contract ReputationTest is Test {
     // Random user without buyer role cannot change reputation
     function test_RandomUser_CannotChangeReputation() public {
         vm.prank(RANDOM_USER);
-        vm.expectRevert("buyer only");
+        vm.expectRevert("authorized buyers only");
         reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
 
         // Reputation remains unchanged
@@ -90,6 +103,8 @@ contract ReputationTest is Test {
     }
 
     function test_Admin_SetScoreReplacesCurrentScore() public {
+        vm.prank(OWNER);
+        reputationContract.authorizeBuyerOrContract(BUYER_1, true);
         // Increase by buyer first
         vm.prank(BUYER_1);
         reputationContract.award(SELLER, JUSTIFICATION_CONTRACT); // reputation = 1
@@ -106,5 +121,35 @@ contract ReputationTest is Test {
         vm.prank(BUYER_1);
         vm.expectRevert("admin only");
         reputationContract.setScore(SELLER, 100);
+    }
+
+    function test_ContractCanBeAuthorizedAndCallAward() public {
+        // deploy helper contract that will call Reputation.award
+        Awarder awarder = new Awarder();
+
+        // OWNER authorizes the helper contract as allowed to award
+        vm.prank(OWNER);
+        reputationContract.authorizeBuyerOrContract(address(awarder), true);
+
+        // call through the helper contract (msg.sender inside award will be the helper contract)
+        awarder.doAward(address(reputationContract), SELLER, JUSTIFICATION_CONTRACT);
+
+        // reputation should be incremented
+        assertEq(reputationContract.reputationOf(SELLER), 1, "Authorized contract should be able to award");
+    }
+
+     function test_AfterOneUseAuthorizationNeedsToBeReissued() public {
+        vm.prank(OWNER);
+        reputationContract.authorizeBuyerOrContract(BUYER_1, true);
+
+        // BUYER_1 awards SELLER
+        vm.prank(BUYER_1);
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
+
+        assertEq(reputationContract.reputationOf(SELLER), 1, "Reputation should be +1 after award");
+
+        vm.prank(BUYER_1);
+        vm.expectRevert("authorized buyers only");
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
     }
 }
