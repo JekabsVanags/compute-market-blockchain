@@ -31,15 +31,17 @@ contract Reputation {
 
 
     // Buyer can increase reputation
-    function award(address who, address justification) external onlyBuyerOrAdmin() {
-        reputation[who] += 1;
-        emit ReputationChanged(who, msg.sender, justification, 1, reputation[who]);
+    function award(address who, address justification, int256 delta) external onlyAuthOrAdmin() {
+        reputation[who] += delta;
+        authorizedRequest[msg.sender] = false;
+        emit ReputationChanged(who, msg.sender, justification, delta, reputation[who]);
     }
 
     // Buyer can reduce reputation
-    function penalize(address who, address justification) external onlyBuyerOrAdmin {
-        reputation[who] -= 1;
-        emit ReputationChanged(who, msg.sender, justification, -1, reputation[who]);
+    function penalize(address who, address justification, int256 delta) external onlyAuthOrAdmin {
+        reputation[who] -= delta;
+        authorizedRequest[msg.sender] = false;
+        emit ReputationChanged(who, msg.sender, justification, -delta, reputation[who]);
     }
 
     // Admin can set reputation
