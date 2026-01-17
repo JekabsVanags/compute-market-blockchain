@@ -227,16 +227,23 @@ class APIClient {
   }
 
   /**
-   * Submit task completion result
+   * Submit task completion result (structured format)
    */
-  async completeTask(taskAddress: string, result: string, accountIndex: number): Promise<boolean> {
+  async completeTask(
+    taskAddress: string,
+    stdout: string,
+    stderr: string,
+    exitCode: number,
+    zipData: string,
+    accountIndex: number
+  ): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/tasks/${taskAddress}/complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ result, accountIndex })
+        body: JSON.stringify({ stdout, stderr, exitCode, zipData, accountIndex })
       });
 
       if (!response.ok) {
@@ -346,15 +353,11 @@ class ExecutorClient {
       console.log(result.stderr.toString('utf-8'));
     }
 
-    // Prepare result string (combine stdout and stderr)
-    let resultString = '';
-    if (result.stdout.length > 0) {
-      resultString += `STDOUT:\n${result.stdout.toString('utf-8')}\n`;
-    }
-    if (result.stderr.length > 0) {
-      resultString += `STDERR:\n${result.stderr.toString('utf-8')}\n`;
-    }
-    resultString += `EXIT_CODE: ${result.status}`;
+    // Prepare structured result data
+    const stdout = result.stdout.toString('utf-8');
+    const stderr = result.stderr.toString('utf-8');
+    const exitCode = result.status;
+    const zipData = result.zip.toString('base64');
 
     // Get account index for this executor
     const accountIndex = await this.findAccountIndex();
@@ -366,7 +369,10 @@ class ExecutorClient {
     console.log('\nSubmitting result to API...');
     const success = await this.apiClient.completeTask(
       task.address,
-      resultString,
+      stdout,
+      stderr,
+      exitCode,
+      zipData,
       accountIndex
     );
     if (success) {
