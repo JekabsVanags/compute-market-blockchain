@@ -1,0 +1,28 @@
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.table thead th {
+  text-align: left;
+  padding: 12px;
+  font-weight: 600;
+  border-bottom: 2px solid #e5e7eb; // only header border
+}
+
+.table tbody tr {
+  &:nth-child(even) {
+    background-color: #505050; // every 2nd row
+  }
+}
+
+.table tbody th,
+.table tbody td {
+  padding: 10px 12px;
+  font-weight: normal;
+}

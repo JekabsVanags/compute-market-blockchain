@@ -1,0 +1,61 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 960px;
+  padding: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  animation: scaleIn 0.15s ease-out;
+  color: #000;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.title {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.content {
+  font-size: 14px;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.errorBox{
+  display: flex;
+  flex-direction: column;
+  background-color: #780606;
+  padding: 8px 16px ;
+  border-radius: 6px;
+}
+
+.successBox {
+  display: flex;
+  flex-direction: column;
+  background-color: #2E6F40;
+  padding: 8px 16px ;
+  border-radius: 6px;
+  color: '#fff';
+}

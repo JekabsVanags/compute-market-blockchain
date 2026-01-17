@@ -1,0 +1,22 @@
+.appLayout {
+  min-height: 100vh;
+  width: 100%;
+
+  display: grid;
+  justify-content: center; // horizontal centering
+  align-items: center;     // vertical centering
+
+  padding: 24px; // prevents edge hugging on small screens
+  box-sizing: border-box;
+}
+
+.Content {
+  width: 100%;
+  max-width: 1200px; // controls page width
+}
+
+.nav {
+  display: flex;
+  gap: 16px;
+  margin: 16px 0px 16px 100px;
+}
