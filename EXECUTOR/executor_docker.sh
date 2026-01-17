@@ -44,27 +44,28 @@ else
 fi
 
 # Build docker run command
-DOCKER_CMD=(docker run --rm --gpus all -i \
-  --entrypoint "" \
-  --name "py-sandbox-$$" \
-  --network=none \
-  --read-only \
-  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
-  --tmpfs /run:rw,noexec,nosuid,nodev,size=16m \
-  --cap-drop=ALL \
-  --security-opt no-new-privileges:true \
-  --security-opt apparmor=docker-default \
-  --security-opt seccomp=unconfined \
+# Add --gpus all back
+DOCKER_CMD=(docker run --rm -i
+  --entrypoint ""
+  --name "py-sandbox-$$"
+  --network=none
+  --read-only
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m
+  --tmpfs /run:rw,noexec,nosuid,nodev,size=16m
+  --cap-drop=ALL
+  --security-opt no-new-privileges:true
+  --security-opt apparmor=docker-default
+  --security-opt seccomp=unconfined
   --user 65534:65534)
 
 # If volume was created, use it as the working directory
 if [ -n "$VOLUME_NAME" ]; then
-  DOCKER_CMD+=(--workdir /workdir/output \
-    -v "${VOLUME_NAME}:/workdir:rw" \
+  DOCKER_CMD+=(--workdir /workdir/output
+    -v "${VOLUME_NAME}:/workdir:rw"
     -v "${CODE_FILE_ABS}:/work/${CODE_BASENAME}:ro")
 else
   # Original behavior: read-only work directory
-  DOCKER_CMD+=(--workdir /work \
+  DOCKER_CMD+=(--workdir /work
     -v "${CODE_FILE_ABS}:/work/${CODE_BASENAME}:ro")
 fi
 
@@ -85,7 +86,7 @@ if [ -n "$OUTPUT_ZIP" ] && [ -n "$VOLUME_NAME" ]; then
       apk add --no-cache zip >/dev/null &&
       cd /workdir/output 2>/dev/null || exit 0
       zip -qr - . -x 2>/dev/null \"$CODE_BASENAME\"
-    " > "$OUTPUT_ZIP"
+    " >"$OUTPUT_ZIP"
 fi
 
 exit $EXIT_CODE

@@ -1,5 +1,17 @@
 # Executor Daemon
 
+## TLDR, how to run for the demo
+
+For the demon this script was simplified.
+
+1. Complete the installation as stated in SERVER project, this solution excepts that it is running
+2. Create an .env file which points to the server address
+3. `npm install`
+4. Run `npm start 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC`, this will handle communication, so that tasks are automatically completed and run upon assignment.
+
+
+## Daemon info
+
 A C++ systemd daemon that receives and executes code via a binary protocol over a Unix domain socket.
 
 ## Protocol Specification

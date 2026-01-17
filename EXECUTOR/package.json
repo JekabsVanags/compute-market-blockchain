@@ -1,0 +1,20 @@
+{
+  "name": "compute-market-seller-client",
+  "version": "1.0.0",
+  "description": "Client for seller",
+  "main": "client.ts",
+  "scripts": {
+    "start": "ts-node client.ts"
+  },
+  "keywords": ["blockchain", "ethereum", "compute-market", "rest-api"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "ts-node": "^10.9.2"
+  }
+}

@@ -1,7 +1,8 @@
 CXX = g++
 
 # Toggle between cpu and gpu
-DOCKER_TYPE = gpu
+#DOCKER_TYPE = gpu
+DOCKER_TYPE = cpu
 
 CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -DDEFAULT_IMAGE=\"executor-$(DOCKER_TYPE)\"
 TARGET = executor_daemon
