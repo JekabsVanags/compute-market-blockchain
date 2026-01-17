@@ -214,24 +214,55 @@ curl -X POST http://localhost:3000/tasks \
 ```
 
 Parameters:
-- `code`: Python code to execute
-- `price`: Payment amount in ETH (e.g., "0.5")
-- `accountIndex`: Buyer's account index (0-19), defaults to 0
+- `code`: Python code to execute (required).
+- `price`: Payment amount in ETH (e.g., "0.5") (required).
+- `accountIndex`: Buyer's account index (0-19), defaults to 0 (optional).
 
-Expected response example:
+Optional computational requirements listed by buyer (all optional):
+- `floatingPointStandard`: E.g., "IEEE 754" (optional).
+- `processingPowerMHz`: Minimum processing power in MHz (optional).
+- `memoryGB`: Minimum memory in GB (optional).
+- `softwareDependencies`: Array of dependencies, e.g., ["pytorch", "numpy"] (optional).
+- `deadline`: ISO timestamp deadline for completion (optional).
+
+Example with requirements (high-tier GPU specs):
+```bash
+curl -X POST http://localhost:3000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "import torch\nprint(torch.cuda.is_available())",
+    "price": "0.5",
+    "accountIndex": 0,
+    "floatingPointStandard": "IEEE 754",
+    "processingPowerMHz": 2520,
+    "memoryGB": 24,
+    "softwareDependencies": ["pytorch", "numpy"],
+    "deadline": "2026-01-20T00:00:00Z"
+  }'
+```
+
+Expected response example (with computational requirements):
 ```json
 {
   "success": true,
   "task": {
-    "address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
-    "transactionHash": "0x30da8bb0419379e8b1497cebf47e3f058932801d1059baad0fe2734c6a3ccc7a",
+    "address": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+    "transactionHash": "0x3e3d733655160242b56f600c3c6b0e916f3648b655882ae59ff991d239ce6c00",
     "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
     "ownerAccountIndex": 0,
-    "commandHash": "0x956719a7927115d7442f63c826b23fb3c0f9b9f7b6c25178217e0a794b5b4ba6",
+    "commandHash": "0xd6a875024d716674524018e1020251484d1f7fb10e51b754f781423f8e74559a",
     "price": "0.5",
     "status": "waiting",
-    "blockNumber": 5,
-    "createdAt": "2026-01-07T22:05:28.153Z"
+    "blockNumber": 11,
+    "createdAt": "2026-01-17T18:35:36.296Z",
+    "floatingPointStandard": "IEEE 754",
+    "processingPowerMHz": 2520,
+    "memoryGB": 24,
+    "softwareDependencies": [
+      "pytorch",
+      "numpy"
+    ],
+    "deadline": "2026-01-20T00:00:00Z"
   }
 }
 ```

@@ -47,6 +47,13 @@ interface Task {
   code: string;                     // Python code to execute.
   commandHash: string;              // Hash of the code (stored on-chain).
   price: string;                    // Payment amount in ETH.
+
+  // Computational requirements (optional - from proposal):
+  floatingPointStandard?: string;   // E.g., "IEEE 754".
+  processingPowerMHz?: number;      // Minimum processing power in MHz.
+  memoryGB?: number;                // Minimum memory in GB.
+  softwareDependencies?: string[];  // E.g., ["numpy", "pandas"].
+  deadline?: string;                // ISO timestamp deadline for completion.
   status: 'waiting' | 'completed' | 'audit_requested' | 'audit_passed' | 'audit_failed' | 'finalized';
   executor?: string;                // Seller's wallet address (set when completed).
   executorAccountIndex?: number;    // Seller's account index (set when completed).
@@ -189,10 +196,11 @@ app.get('/accounts', async (req: Request, res: Response) => {
 // POST /tasks - Create new compute task endpoint:
 // Deploys a new Request contract to represent a compute task.
 // Request body: { "code": "import numpy...", "price": "0.1", "accountIndex": 0 }
+// Optional fields: floatingPointStandard, processingPowerMHz, memoryGB, softwareDependencies, deadline
 // Response: { "success": true, "task": { ... } }
 app.post('/tasks', async (req: Request, res: Response) => {
   try {
-    const { code, price, accountIndex } = req.body;
+    const { code, price, accountIndex, floatingPointStandard, processingPowerMHz, memoryGB, softwareDependencies, deadline } = req.body;
 
     // Validate required fields:
     if (!code || !price) {
@@ -230,6 +238,13 @@ app.post('/tasks', async (req: Request, res: Response) => {
       createdAt: new Date().toISOString()
     };
 
+    // Add optional computational requirements if provided:
+    if (floatingPointStandard) task.floatingPointStandard = floatingPointStandard;
+    if (processingPowerMHz) task.processingPowerMHz = processingPowerMHz;
+    if (memoryGB) task.memoryGB = memoryGB;
+    if (softwareDependencies) task.softwareDependencies = softwareDependencies;
+    if (deadline) task.deadline = deadline;
+
     tasks.set(result.address, task);
 
     // Return the created task:
@@ -244,7 +259,13 @@ app.post('/tasks', async (req: Request, res: Response) => {
         price: task.price,
         status: task.status,
         blockNumber: task.blockNumber,
-        createdAt: task.createdAt
+        createdAt: task.createdAt,
+        // Include computational requirements if provided:
+        ...(task.floatingPointStandard && { floatingPointStandard: task.floatingPointStandard }),
+        ...(task.processingPowerMHz && { processingPowerMHz: task.processingPowerMHz }),
+        ...(task.memoryGB && { memoryGB: task.memoryGB }),
+        ...(task.softwareDependencies && { softwareDependencies: task.softwareDependencies }),
+        ...(task.deadline && { deadline: task.deadline })
       }
     });
   } catch (error: any) {
