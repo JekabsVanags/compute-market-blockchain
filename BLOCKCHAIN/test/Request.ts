@@ -15,6 +15,16 @@ let randomUser: any;
 
 let commands = ["cmd1", "cmd2", "cmd3"];
 
+// State enum values
+const State = {
+  Created: 0,
+  ExecutorAssigned: 1,
+  ResultSubmitted: 2,
+  AuditRequested: 3,
+  Audited: 4,
+  Completed: 5,
+};
+
 describe("Requests", function () {
   beforeEach(async function () {
     [owner, buyer, seller, auditor, randomUser] = await ethers.getSigners();
@@ -74,9 +84,9 @@ describe("Requests", function () {
       .withArgs(wrongHash, seller.address);
 
     // Buyer requests audit
-    await expect(request.connect(buyer).requestAudit("suspicious result"))
+    await expect(request.connect(owner).requestAudit("suspicious result"))
       .to.emit(request, "AuditRequested")
-      .withArgs(buyer.address, "suspicious result");
+      .withArgs(owner.address, "suspicious result");
 
     // Admin assigns auditor
     await expect(request.connect(owner).appointAuditor(auditor.address))
@@ -93,12 +103,12 @@ describe("Requests", function () {
 
     // Verify state reset to Created
     const info = await request.getInformation();
-    expect(info.state).to.equal(0); // State.Created
+    expect(info.state).to.equal(State.Created);
 
     // Penalize executor via admin (emit event from Reputation)
-    await expect(reputation.connect(owner).penalize(seller.address, request.getAddress(), 1))
+    await expect(reputation.connect(owner).penalize(seller.address, await request.getAddress(), 1))
       .to.emit(reputation, "ReputationChanged")
-      .withArgs(seller.address, owner.address, request.getAddress(), -1, -1);
+      .withArgs(seller.address, owner.address, await request.getAddress(), -1, -1);
   });
 
   it("should emit events for successful workflow and awarding executor", async function () {
@@ -114,9 +124,9 @@ describe("Requests", function () {
       .withArgs(resultHash, seller.address);
 
     // Buyer requests audit
-    await expect(request.connect(buyer).requestAudit("want to verify"))
+    await expect(request.connect(owner).requestAudit("want to verify"))
       .to.emit(request, "AuditRequested")
-      .withArgs(buyer.address, "want to verify");
+      .withArgs(owner.address, "want to verify");
 
     // Admin assigns auditor
     await expect(request.connect(owner).appointAuditor(auditor.address))
@@ -128,23 +138,23 @@ describe("Requests", function () {
       .to.emit(request, "AuditorResultAssigned")
       .withArgs(resultHash, auditor.address);
 
-    // Verify state is now Audited (5)
+    // Verify state is now Audited
     let info = await request.getInformation();
-    expect(info.state).to.equal(5); // State.Audited
+    expect(info.state).to.equal(State.Audited);
 
     // Admin completes the request
     await expect(request.connect(owner).completeRequest())
       .to.emit(request, "RequestFinished")
       .withArgs(seller.address, auditor.address, resultHash);
 
-    // Verify state is now Completed (6)
+    // Verify state is now Completed
     info = await request.getInformation();
-    expect(info.state).to.equal(6); // State.Completed
+    expect(info.state).to.equal(State.Completed);
 
     // Admin awards executor
-    await expect(reputation.connect(owner).award(seller.address, request.getAddress(), 1))
+    await expect(reputation.connect(owner).award(seller.address, await request.getAddress(), 1))
       .to.emit(reputation, "ReputationChanged")
-      .withArgs(seller.address, owner.address, request.getAddress(), 1, 1);
+      .withArgs(seller.address, owner.address, await request.getAddress(), 1, 1);
   });
 
   it("should complete without audit when no audit requested", async function () {
@@ -155,9 +165,9 @@ describe("Requests", function () {
     const resultHash = ethers.keccak256(ethers.toUtf8Bytes("result"));
     await request.connect(seller).assignResult(resultHash);
 
-    // Verify state is ResultSubmitted (2)
+    // Verify state is ResultSubmitted
     let info = await request.getInformation();
-    expect(info.state).to.equal(2); // State.ResultSubmitted
+    expect(info.state).to.equal(State.ResultSubmitted);
 
     // Admin completes without audit
     await expect(request.connect(owner).completeRequest())
@@ -166,7 +176,7 @@ describe("Requests", function () {
 
     // Verify completed
     info = await request.getInformation();
-    expect(info.state).to.equal(6); // State.Completed
+    expect(info.state).to.equal(State.Completed);
   });
 
   it("should use ground truth on retry after faulty result", async function () {
@@ -175,8 +185,8 @@ describe("Requests", function () {
     const wrongHash = ethers.keccak256(ethers.toUtf8Bytes("wrong"));
     await request.connect(seller).assignResult(wrongHash);
 
-    // Buyer requests audit
-    await request.connect(buyer).requestAudit("check this");
+    // Admin requests audit
+    await request.connect(owner).requestAudit("check this");
     await request.connect(owner).appointAuditor(auditor.address);
 
     // Auditor establishes ground truth
@@ -185,7 +195,7 @@ describe("Requests", function () {
 
     // State should be back to Created
     let info = await request.getInformation();
-    expect(info.state).to.equal(0); // State.Created
+    expect(info.state).to.equal(State.Created);
     expect(info.auditorResultHash_).to.equal(correctHash); // Ground truth stored
 
     // Second attempt - new executor
@@ -202,7 +212,7 @@ describe("Requests", function () {
 
     // Should jump directly to Audited state
     info = await request.getInformation();
-    expect(info.state).to.equal(5); // State.Audited
+    expect(info.state).to.equal(State.Audited);
 
     // Can complete now
     await expect(request.connect(owner).completeRequest())

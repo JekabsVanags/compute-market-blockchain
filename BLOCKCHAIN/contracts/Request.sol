@@ -150,10 +150,10 @@ contract Request {
         public
         onlyExecutor
         inState(State.ExecutorAssigned)
-        transitionTo(State.ResultSubmitted)
     {
         resultHash = calculatedResultHash;
         emit ResultAssigned(calculatedResultHash, msg.sender);
+        currentState = State.ResultSubmitted;
 
         // If auditor already posted result, evaluate immediately
         if (auditorResultHash != bytes32(0)) {
