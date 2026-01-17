@@ -38,7 +38,7 @@ app.use(cors());             // Allow frontend to call API from different origin
 app.use(express.json());     // Parse JSON request bodies.
 
 // In-memory task storage:
-// Task lifecycle: waiting → completed → finalized
+// Task lifecycle: waiting → completed → audit_requested → audit_passed/audit_failed → finalized
 interface Task {
   address: string;                  // Contract address on blockchain.
   transactionHash: string;          // Deployment transaction hash.
@@ -47,18 +47,36 @@ interface Task {
   code: string;                     // Python code to execute.
   commandHash: string;              // Hash of the code (stored on-chain).
   price: string;                    // Payment amount in ETH.
-  status: 'waiting' | 'completed' | 'finalized';
+  status: 'waiting' | 'completed' | 'audit_requested' | 'audit_passed' | 'audit_failed' | 'finalized';
   executor?: string;                // Seller's wallet address (set when completed).
   executorAccountIndex?: number;    // Seller's account index (set when completed).
-  result?: string;                  // Computation result (set when completed).
+  result?: string;                  // Computation result (set when completed) - legacy format (replaced by structured output below).
   paymentTransactionHash?: string;  // Payment transaction hash (set when finalized).
+
+  // Structured execution output - new format (for better frontend display):
+  stdout?: string;                  // Standard output from code execution.
+  stderr?: string;                  // Standard error from code execution.
+  exitCode?: number;                // Exit code from code execution.
+  zipData?: string;                 // Base64-encoded ZIP file of execution artifacts.
   blockNumber: number;              // Block where contract was deployed.
   createdAt: string;                // ISO timestamp when task was created.
   completedAt?: string;             // ISO timestamp when seller completed task.
   finalizedAt?: string;             // ISO timestamp when buyer finalized task.
+
+  // Audit fields - only populated if audit is requested:
+  auditReason?: string;             // Reason buyer requested audit.
+  auditRequestedAt?: string;        // ISO timestamp when audit was requested.
+  auditor?: string;                 // Auditor's wallet address (set when audit result submitted).
+  auditorAccountIndex?: number;     // Auditor's account index (0-19).
+  auditorResult?: string;           // Auditor's computation result.
+  auditCompletedAt?: string;        // ISO timestamp when audit was completed.
 }
 
 const tasks = new Map<string, Task>();  // Key: contract address, Value: Task
+
+// In-memory reputation storage:
+// Tracks reputation scores for seller addresses (integer score in memory for MVP purposes, can be migrated to call Reputation smart contract later).
+const reputationScores = new Map<string, number>(); // Key: seller address, Value: reputation score
 
 // Hardhat private keys array (for account index lookup):
 const HARDHAT_PRIVATE_KEYS = [
@@ -360,17 +378,22 @@ app.post('/tasks/:address/assign', async (req: Request, res: Response) => {
 
 // POST /tasks/:address/complete - Seller completes task:
 // Seller submits the computation result.
-// Request body: { "result": "...", "accountIndex": 1 }
+// Supports two formats:
+// - Legacy: { "result": "...", "accountIndex": 1 }
+// - Structured: { "stdout": "...", "stderr": "...", "exitCode": 0, "zipData": "base64...", "accountIndex": 1 }
 // Response: { "success": true, "task": { ... } }
 app.post('/tasks/:address/complete', async (req: Request, res: Response) => {
   try {
     const { address } = req.params;
-    const { result, accountIndex } = req.body;
+    const { result, accountIndex, stdout, stderr, exitCode, zipData } = req.body;
 
-    // Validate required fields:
-    if (!result) {
+    // Validate required fields (either legacy result or new structured format):
+    const hasLegacyFormat = result !== undefined;
+    const hasStructuredFormat = stdout !== undefined || stderr !== undefined || exitCode !== undefined;
+
+    if (!hasLegacyFormat && !hasStructuredFormat) {
       return res.status(400).json({
-        error: 'Missing required field: result'
+        error: 'Missing required fields: either "result" or structured output (stdout/stderr/exitCode)'
       });
     }
 
@@ -414,10 +437,31 @@ app.post('/tasks/:address/complete', async (req: Request, res: Response) => {
       }
     }
 
-    // Update task status and result:
+    // Update task status and result (supports both legacy and structured formats):
     task.status = 'completed';
-    task.result = result;
     task.completedAt = new Date().toISOString();
+
+    // Store legacy format if provided:
+    if (hasLegacyFormat) {
+      task.result = result;
+    }
+
+    // Store structured format if provided (new format for better frontend display):
+    if (hasStructuredFormat) {
+      task.stdout = stdout;
+      task.stderr = stderr;
+      task.exitCode = exitCode;
+      task.zipData = zipData;
+
+      // If no legacy result provided, create one from structured data for backwards compatibility:
+      if (!hasLegacyFormat) {
+        let combinedResult = '';
+        if (stdout) combinedResult += `STDOUT:\n${stdout}\n`;
+        if (stderr) combinedResult += `STDERR:\n${stderr}\n`;
+        if (exitCode !== undefined) combinedResult += `EXIT_CODE: ${exitCode}`;
+        task.result = combinedResult;
+      }
+    }
 
     res.json({
       success: true,
@@ -427,7 +471,11 @@ app.post('/tasks/:address/complete', async (req: Request, res: Response) => {
         executor: task.executor,
         executorAccountIndex: task.executorAccountIndex,
         result: task.result,
+        stdout: task.stdout,
+        stderr: task.stderr,
+        exitCode: task.exitCode,
         completedAt: task.completedAt
+        // Note: zipData intentionally omitted from response (too large, use GET endpoint to retrieve).
       }
     });
   } catch (error: any) {
@@ -504,6 +552,238 @@ app.post('/tasks/:address/finalize', async (req: Request, res: Response) => {
   }
 });
 
+// POST /tasks/:address/request-audit - Buyer requests audit for completed task:
+// Called when buyer doesn't trust the executor's result and wants verification.
+// In MVP: Marks task as needing audit, stores reason in memory.
+// In full workflow: Would call contract.requestAudit() to trigger on-chain audit.
+// Request body: { "reason": "Result looks suspicious." }
+// Response: { "success": true, "task": { ... } }
+app.post('/tasks/:address/request-audit', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+    const { reason } = req.body;
+
+    // Validate reason provided:
+    if (!reason || typeof reason !== 'string') {
+      return res.status(400).json({
+        error: 'Missing required field: reason'
+      });
+    }
+
+    // Find task:
+    const task = tasks.get(address);
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found!'
+      });
+    }
+
+    // Validate status (can only audit completed tasks):
+    if (task.status !== 'completed') {
+      return res.status(400).json({
+        error: `Task cannot be audited (current status: ${task.status}). Only completed tasks can be audited!`
+      });
+    }
+
+    // Mark task as audit requested:
+    task.status = 'audit_requested';
+    task.auditReason = reason;
+    task.auditRequestedAt = new Date().toISOString();
+
+    res.json({
+      success: true,
+      task: {
+        address: task.address,
+        status: task.status,
+        auditReason: task.auditReason,
+        auditRequestedAt: task.auditRequestedAt
+      }
+    });
+  } catch (error: any) {
+    console.error('Error requesting audit:', error);
+
+    res.status(500).json({
+      error: 'Failed to request audit!',
+      details: error.message
+    });
+  }
+});
+
+// POST /tasks/:address/submit-audit-result - Auditor submits their verification result:
+// Called by a different seller who re-runs the computation to verify executor's work.
+// Compares auditor's result with executor's result:
+// - Match: Executor was honest → increase reputation, mark audit passed.
+// - Mismatch: Executor was dishonest → decrease reputation, mark audit failed.
+// In MVP: Simple comparison and reputation tracking in memory.
+// In full workflow: Would call contract.assignAuditorResult() for on-chain verification.
+// Supports two formats (same as /complete):
+// - Legacy: { "result": "6", "accountIndex": 2 }
+// - Structured: { "stdout": "...", "stderr": "...", "exitCode": 0, "accountIndex": 2 }
+// Response: { "success": true, "task": { ... }, "reputationChange": +10 or -10 }
+app.post('/tasks/:address/submit-audit-result', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+    const { result, accountIndex, stdout, stderr, exitCode } = req.body;
+
+    // Validate required fields (either legacy result or new structured format):
+    const hasLegacyFormat = result !== undefined;
+    const hasStructuredFormat = stdout !== undefined || stderr !== undefined || exitCode !== undefined;
+
+    if (!hasLegacyFormat && !hasStructuredFormat) {
+      return res.status(400).json({
+        error: 'Missing required fields: either "result" or structured output (stdout/stderr/exitCode)'
+      });
+    }
+
+    // Validate account index (default to 1 if not provided):
+    const auditorAccountIndex = accountIndex !== undefined ? accountIndex : 1;
+    if (auditorAccountIndex < 0 || auditorAccountIndex >= 20) {
+      return res.status(400).json({
+        error: 'Invalid accountIndex (must be 0-19)!'
+      });
+    }
+
+    // Find task:
+    const task = tasks.get(address);
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found!'
+      });
+    }
+
+    // Validate status (can only submit audit for tasks with audit requested):
+    if (task.status !== 'audit_requested') {
+      return res.status(400).json({
+        error: `Cannot submit audit result (current status: ${task.status}). Audit must be requested first!`
+      });
+    }
+
+    // Get auditor's wallet address from account index:
+    const config = getBlockchainConfig(auditorAccountIndex);
+    const auditorAddress = (await getHardhatAccounts(config.rpcUrl))[auditorAccountIndex].address;
+
+    // Prevent executor from auditing their own work:
+    if (task.executorAccountIndex === auditorAccountIndex) {
+      return res.status(403).json({
+        error: 'Executor cannot audit their own task!'
+      });
+    }
+
+    // Store auditor information and result:
+    task.auditor = auditorAddress;
+    task.auditorAccountIndex = auditorAccountIndex;
+    task.auditCompletedAt = new Date().toISOString();
+
+    // Store auditor's result (legacy format for backwards compatibility):
+    if (hasLegacyFormat) {
+      task.auditorResult = result;
+    } else {
+      // Create combined result from structured data:
+      let combinedResult = '';
+      if (stdout) combinedResult += `STDOUT:\n${stdout}\n`;
+      if (stderr) combinedResult += `STDERR:\n${stderr}\n`;
+      if (exitCode !== undefined) combinedResult += `EXIT_CODE: ${exitCode}`;
+      task.auditorResult = combinedResult;
+    }
+
+    // Compare auditor's result with executor's result:
+    // Prefer structured comparison if both have structured data, otherwise compare strings:
+    let resultsMatch: boolean;
+
+    if (hasStructuredFormat && task.stdout !== undefined) {
+      // Both have structured format - compare stdout only (most important part):
+      const executorStdout = task.stdout || '';
+      const auditorStdout = stdout || '';
+      resultsMatch = executorStdout.trim() === auditorStdout.trim();
+    } else {
+      // At least one is legacy format - compare result strings:
+      resultsMatch = task.result === task.auditorResult;
+    }
+
+    let reputationChange = 0;
+    const executorAddress = task.executor!;
+
+    if (resultsMatch) {
+      // Audit passed – executor was honest, increase their reputation:
+      task.status = 'audit_passed';
+      reputationChange = 10;
+
+      // Update executor's reputation:
+      const currentReputation = reputationScores.get(executorAddress) || 0;
+      reputationScores.set(executorAddress, currentReputation + reputationChange);
+    } else {
+      // Audit failed – executor was dishonest, decrease their reputation:
+      task.status = 'audit_failed';
+      reputationChange = -10;
+
+      // Update executor's reputation:
+      const currentReputation = reputationScores.get(executorAddress) || 0;
+      reputationScores.set(executorAddress, currentReputation + reputationChange);
+    }
+
+    // Award small reputation bonus to auditor for doing the verification work:
+    const auditorReputation = reputationScores.get(auditorAddress) || 0;
+    reputationScores.set(auditorAddress, auditorReputation + 2);
+
+    res.json({
+      success: true,
+      task: {
+        address: task.address,
+        status: task.status,
+        auditor: task.auditor,
+        auditorAccountIndex: task.auditorAccountIndex,
+        auditorResult: task.auditorResult,
+        auditCompletedAt: task.auditCompletedAt,
+        resultsMatch
+      },
+      reputationChange: {
+        executor: reputationChange,
+        auditor: 2
+      }
+    });
+  } catch (error: any) {
+    console.error('Error submitting audit result:', error);
+
+    res.status(500).json({
+      error: 'Failed to submit audit result!',
+      details: error.message
+    });
+  }
+});
+
+// GET /reputation/:address - Get reputation score for a seller:
+// Returns the current reputation score for a given seller address.
+// In MVP: Returns score from in-memory Map (starts at 0 for new sellers).
+// In full workflow: Would call Reputation.reputationOf() smart contract method.
+// Response: { "address": "0x...", "reputation": 10 }
+app.get('/reputation/:address', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+
+    // Validate address format (basic check for 0x prefix and length):
+    if (!address || !address.startsWith('0x') || address.length !== 42) {
+      return res.status(400).json({
+        error: 'Invalid Ethereum address format!'
+      });
+    }
+
+    // Get reputation from in-memory storage (defaults to 0 if never seen):
+    const reputation = reputationScores.get(address) || 0;
+
+    res.json({
+      address,
+      reputation
+    });
+  } catch (error: any) {
+    console.error('Error fetching reputation:', error);
+
+    res.status(500).json({
+      error: 'Failed to fetch reputation!',
+      details: error.message
+    });
+  }
+});
+
 // Start the Express server:
 // Once running, the frontend can call the API endpoints.
 app.listen(PORT, () => {
@@ -516,5 +796,8 @@ app.listen(PORT, () => {
   console.log(`  GET  /tasks/:address - Get specific task details.`);
   console.log(`  POST /tasks/:address/assign - Seller claims task.`);
   console.log(`  POST /tasks/:address/complete - Seller completes task.`);
+  console.log(`  POST /tasks/:address/request-audit - Buyer requests audit.`);
+  console.log(`  POST /tasks/:address/submit-audit-result - Auditor submits verification.`);
   console.log(`  POST /tasks/:address/finalize - Buyer finalizes and pays.`);
+  console.log(`  GET  /reputation/:address - Get seller reputation score.`);
 });

@@ -149,7 +149,10 @@ Endpoints:
   GET  /tasks/:address - Get specific task details.
   POST /tasks/:address/assign - Seller claims task.
   POST /tasks/:address/complete - Seller completes task.
+  POST /tasks/:address/request-audit - Buyer requests audit.
+  POST /tasks/:address/submit-audit-result - Auditor submits verification.
   POST /tasks/:address/finalize - Buyer finalizes and pays.
+  GET  /reputation/:address - Get seller reputation score.
 ```
 
 #### API Endpoints:
@@ -316,7 +319,27 @@ curl -X POST http://localhost:3000/tasks/0xDc64a140Aa3E981100a9becA4E685f962f0cF
 ```
 
 Parameters:
-- `result`: Computation result.
+- `result`: Computation result (legacy format - simple string).
+- `accountIndex`: Seller's account index (0-19).
+
+**Alternative structured format** (for better frontend display):
+```bash
+curl -X POST http://localhost:3000/tasks/0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9/complete \
+  -H "Content-Type: application/json" \
+  -d '{
+    "stdout": "10",
+    "stderr": "",
+    "exitCode": 0,
+    "zipData": "base64encodedzip...",
+    "accountIndex": 1
+  }'
+```
+
+Parameters (structured format):
+- `stdout`: Standard output from execution.
+- `stderr`: Standard error from execution.
+- `exitCode`: Exit code (0 = success).
+- `zipData`: Base64-encoded ZIP file of execution artifacts (optional).
 - `accountIndex`: Seller's account index (0-19).
 
 Expected response example:
@@ -355,6 +378,82 @@ Expected response example:
   }
 }
 ```
+
+**POST /tasks/:address/request-audit** - buyer requests audit for completed task:
+```bash
+curl -X POST http://localhost:3000/tasks/0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9/request-audit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "Result looks incorrect."
+  }'
+```
+
+Parameters:
+- `reason`: Explanation why audit is needed.
+
+Expected response example:
+```json
+{
+  "success": true,
+  "task": {
+    "address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+    "status": "audit_requested",
+    "auditReason": "Result looks incorrect.",
+    "auditRequestedAt": "2026-01-07T22:07:00.000Z"
+  }
+}
+```
+
+**POST /tasks/:address/submit-audit-result** - auditor verifies computation:
+```bash
+curl -X POST http://localhost:3000/tasks/0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9/submit-audit-result \
+  -H "Content-Type: application/json" \
+  -d '{
+    "result": "6",
+    "accountIndex": 2
+  }'
+```
+
+Parameters:
+- `result`: Auditor's computed result.
+- `accountIndex`: Auditor's account index (0-19).
+
+Expected response example (results match):
+```json
+{
+  "success": true,
+  "task": {
+    "address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+    "status": "audit_passed",
+    "auditor": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    "auditorAccountIndex": 2,
+    "auditorResult": "6",
+    "auditCompletedAt": "2026-01-07T22:08:00.000Z",
+    "resultsMatch": true
+  },
+  "reputationChange": {
+    "executor": 10,
+    "auditor": 2
+  }
+}
+```
+
+Note: If results don't match, executor loses 10 reputation and task status becomes `audit_failed`.
+
+**GET /reputation/:address** - get seller reputation score:
+```bash
+curl http://localhost:3000/reputation/0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+```
+
+Expected response example:
+```json
+{
+  "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+  "reputation": 10
+}
+```
+
+Note: Reputation starts at 0. Increases by +10 for passing audits, decreases by -10 for failing audits. Auditors earn +2 for each audit performed.
 
 **Verify final task state** - check complete task details:
 ```bash
@@ -410,10 +509,19 @@ Note: Account #0 (buyer) spent ~1.06 ETH total (0.5555 ETH for task, plus gas fe
 
 #### Task lifecycle:
 
+**Standard flow (no audit):**
 1. **waiting**: Buyer creates task with POST /tasks (deploys Request contract with ETH payment).
 2. **assigned** (optional): Seller claims task with POST /tasks/:address/assign.
 3. **completed**: Seller completes task with POST /tasks/:address/complete (submits result).
 4. **finalized**: Buyer finalizes task with POST /tasks/:address/finalize (ETH sent to seller).
+
+**Audit flow (buyer doesn't trust result):**
+1. **waiting** → **assigned** → **completed**: Same as standard flow.
+2. **audit_requested**: Buyer requests audit with POST /tasks/:address/request-audit.
+3. **audit_passed** or **audit_failed**: Auditor verifies with POST /tasks/:address/submit-audit-result.
+   - If results match: Executor gains +10 reputation, auditor gains +2.
+   - If results don't match: Executor loses -10 reputation, auditor gains +2.
+4. **finalized**: Buyer finalizes task (only if audit passed).
 
 #### Quick test sequence:
 
