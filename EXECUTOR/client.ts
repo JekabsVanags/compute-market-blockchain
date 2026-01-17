@@ -28,9 +28,10 @@ interface Task {
   code: string;
   commandHash: string;
   price: string;
-  status: 'waiting' | 'completed' | 'finalized';
+  status: 'waiting' | 'completed' | 'audit_requested' | 'audit_passed' | 'audit_failed' | 'finalized';
   executor?: string;
   executorAccountIndex?: number;
+  auditorAccountIndex?: number;
   result?: string;
   blockNumber: number;
   createdAt: string;
@@ -258,6 +259,39 @@ class APIClient {
       return false;
     }
   }
+
+  /**
+   * Submit audit result (structured format)
+   */
+  async submitAuditResult(
+    taskAddress: string,
+    stdout: string,
+    stderr: string,
+    exitCode: number,
+    zipData: string,
+    accountIndex: number
+  ): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseUrl}/tasks/${taskAddress}/submit-audit-result`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ stdout, stderr, exitCode, zipData, accountIndex })
+      });
+
+      if (!response.ok) {
+        const errorData = (await response.json()) as any;
+        console.error(`Error submitting audit result: ${errorData.error || response.statusText}`);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`Error submitting audit result:`, error);
+      return false;
+    }
+  }
 }
 
 /**
@@ -313,11 +347,28 @@ class ExecutorClient {
   }
 
   /**
-   * Execute a task and submit the result
+   * Find audit tasks assigned to this executor's account index
    */
-  async executeTask(task: Task): Promise<void> {
+  async findAuditTasks(): Promise<Task[]> {
+    const allTasks = await this.apiClient.getTasks();
+
+    return allTasks.filter(task =>
+      task.status === 'audit_requested' &&
+      // Just audit all
+      //task.auditorAccountIndex === this.executorAccountIndex &&
+      !this.processedTasks.has(task.address)
+    );
+  }
+
+  /**
+   * Common method to run code and get execution results
+   */
+  private async runTask(task: Task, mode: 'execute' | 'audit'): Promise<boolean> {
+    const modeLabel = mode === 'execute' ? 'Executing' : 'Auditing';
+    const codeLabel = mode === 'execute' ? 'Code to execute' : 'Code to audit';
+
     console.log(`\n${'='.repeat(60)}`);
-    console.log(`Executing task: ${task.address}`);
+    console.log(`${modeLabel} task: ${task.address}`);
     console.log(`Price: ${task.price} ETH`);
     console.log(`${'='.repeat(60)}\n`);
 
@@ -325,10 +376,10 @@ class ExecutorClient {
     const fullTask = await this.apiClient.getTask(task.address);
     if (!fullTask || !fullTask.code) {
       console.error(`Cannot get task code for ${task.address}`);
-      return;
+      return false;
     }
 
-    console.log('Code to execute:');
+    console.log(`${codeLabel}:`);
     console.log('-'.repeat(60));
     console.log(fullTask.code);
     console.log('-'.repeat(60));
@@ -339,7 +390,7 @@ class ExecutorClient {
 
     if (!result) {
       console.error('✗ Failed to execute code (daemon error)');
-      return;
+      return false;
     }
 
     // Display execution output
@@ -359,28 +410,41 @@ class ExecutorClient {
     const exitCode = result.status;
     const zipData = result.zip.toString('base64');
 
-    // Get account index for this executor
+    // Get account index
     const accountIndex = await this.findAccountIndex();
     if (accountIndex === null) {
-      console.error('✗ Cannot find account index for executor address');
-      return;
+      console.error(`✗ Cannot find account index for ${mode === 'execute' ? 'executor' : 'auditor'} address`);
+      return false;
     }
-    // Submit result to API
-    console.log('\nSubmitting result to API...');
-    const success = await this.apiClient.completeTask(
-      task.address,
-      stdout,
-      stderr,
-      exitCode,
-      zipData,
-      accountIndex
-    );
+
+    // Submit result to appropriate API endpoint
+    console.log(`\nSubmitting ${mode === 'execute' ? 'result' : 'audit result'} to API...`);
+    const success = mode === 'execute'
+      ? await this.apiClient.completeTask(task.address, stdout, stderr, exitCode, zipData, accountIndex)
+      : await this.apiClient.submitAuditResult(task.address, stdout, stderr, exitCode, zipData, accountIndex);
+
     if (success) {
-      console.log('✓ Task completed successfully!');
+      console.log(`✓ ${mode === 'execute' ? 'Task completed' : 'Audit completed'} successfully!`);
       this.processedTasks.add(task.address);
+      return true;
     } else {
-      console.error('✗ Failed to submit task completion');
+      console.error(`✗ Failed to submit ${mode === 'execute' ? 'task completion' : 'audit result'}`);
+      return false;
     }
+  }
+
+  /**
+   * Execute a task and submit the result
+   */
+  async executeTask(task: Task): Promise<void> {
+    await this.runTask(task, 'execute');
+  }
+
+  /**
+   * Audit a task and submit the verification result
+   */
+  async auditTask(task: Task): Promise<void> {
+    await this.runTask(task, 'audit');
   }
 
   /**
@@ -400,17 +464,27 @@ class ExecutorClient {
       console.warn('Warning: Could not find account index for executor address');
     }
 
-    console.log(`\nWaiting for assigned tasks...\n`);
+    console.log(`\nWaiting for assigned tasks and audit tasks...\n`);
 
     while (true) {
       try {
-        const assignedTasks = await this.findAssignedTasks();
+        // Fetch both assigned tasks and audit tasks in parallel
+        const [assignedTasks, auditTasks] = await Promise.all([
+          this.findAssignedTasks(),
+          this.findAuditTasks()
+        ]);
 
-        if (assignedTasks.length > 0) {
-          console.log(`Found ${assignedTasks.length} task(s) to execute`);
+        const allTasks = assignedTasks.concat(auditTasks);
 
-          for (const task of assignedTasks) {
-            await this.executeTask(task);
+        if (allTasks.length > 0) {
+          console.log(`Found ${allTasks.length} task(s) (${assignedTasks.length} execution, ${auditTasks.length} audit)`);
+
+          for (const task of allTasks) {
+            if (task.status === 'waiting') {
+              await this.executeTask(task);
+            } else if (task.status === 'audit_requested') {
+              await this.auditTask(task);
+            }
           }
         }
 
