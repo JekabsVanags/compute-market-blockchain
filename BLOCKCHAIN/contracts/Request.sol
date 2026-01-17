@@ -19,7 +19,7 @@ contract Request {
     address payable public auditor;
 
     // State machine
-    enum State { Created, ExecutorAssigned, ResultSubmitted, Audited, Completed }
+    enum State { Created, ExecutorAssigned, ResultSubmitted, AuditRequested, Audited, Completed }
     State public currentState;
 
     // Data fields
@@ -27,6 +27,7 @@ contract Request {
     bytes32 public resultHash;
     bytes32 public auditorResultHash;
     bool public faultyResult;
+    bool public auditRequired;
 
     // Events
     event ExecutorAssigned(address indexed account);
@@ -36,6 +37,7 @@ contract Request {
     event FaultyCalculationDetected(address indexed auditedBy, address calculatedBy, bytes32 executionHash, bytes32 auditHash);
     event FaultyCalculationFixed(address indexed auditedBy, address calculatedBy);
     event RequestFinished(address indexed calculatedBy,address auditedBy, bytes32 resultHash);
+    event AuditRequested(address indexed requestedBy, string reason);
 
     // Payments
     uint256 public escrowAmount;
@@ -116,11 +118,24 @@ contract Request {
         emit ExecutorAssigned(potentialExecutor);
     }
 
+    ///@notice Can ask for audit
+    function requestAudit(string memory reason)
+        public
+        onlyAdmin
+        inState(State.ResultSubmitted)
+        transitionTo(State.AuditRequested)
+    {
+        //Cant audit singe job more than once
+        require(!auditRequired, "Audit already has been requested");
+        auditRequired = true;
+        emit AuditRequested(msg.sender, reason);
+    }
+
     /// @notice Admin appoints an auditor. Allowed when executor is assigned.
     function appointAuditor(address payable potentialAuditor)
         public
         onlyAdmin
-        inState(State.ExecutorAssigned)
+        inState(State.AuditRequested)
     {
         require(potentialAuditor != executor, "auditor cannot be executor");
         require(roles.hasRole(roles.SELLER_ROLE(), potentialAuditor), "candidate not a seller");
@@ -145,16 +160,12 @@ contract Request {
             if (auditorResultHash == resultHash) {
                 faultyResult = false;
                 emit FaultyCalculationFixed(auditor, executor);
-                currentState = State.Completed; // overwrite transition
-                
-                //Funds ready to transfered
-                _payoutExecutor();
-
-                emit RequestFinished(executor, auditor, resultHash);
+                currentState = State.Audited;
             } else {
                 faultyResult = true;
                 emit FaultyCalculationDetected(auditor, executor, resultHash, auditorResultHash);
                 executor = payable(address(0));
+                resultHash = bytes32(0);
                 currentState = State.Created; // allow retry
             }
         }
@@ -164,7 +175,7 @@ contract Request {
     function assignAuditResult(bytes32 calculatedResultHash)
         public
         onlyAuditor
-        inState(State.ResultSubmitted)
+        inState(State.AuditRequested)
     {
         auditorResultHash = calculatedResultHash;
         emit AuditorResultAssigned(calculatedResultHash, msg.sender);
@@ -175,14 +186,35 @@ contract Request {
             faultyResult = true;
             emit FaultyCalculationDetected(auditor, executor, resultHash, auditorResultHash);
             executor = payable(address(0));
+            resultHash = bytes32(0);
             // allow re-assignment to try again
             currentState = State.Created;
         } else {
-            currentState = State.Completed;
-            //Funds ready to be transfered
-            _payoutExecutor();
-            emit RequestFinished(executor, auditor, resultHash);
+            currentState = State.Audited;
         }
+    }
+
+    function completeRequest()
+        public
+        onlyAdmin
+        transitionTo(State.Completed)
+    {
+        require(
+            currentState == State.ResultSubmitted || 
+            currentState == State.Audited,
+            "Invalid state"
+        );
+        
+        // If audit was required, verify it passed
+        if (auditRequired) {
+            require(currentState == State.Audited, "Audit not submitted");
+            require(auditorResultHash == resultHash, "Audit failed - results don't match");
+        }
+        
+        require(resultHash != bytes32(0), "No result submitted");
+        
+        _payoutExecutor();
+        emit RequestFinished(executor, auditor, resultHash);
     }
 
 //Payouts

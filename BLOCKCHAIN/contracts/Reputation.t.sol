@@ -8,7 +8,7 @@ import {Test} from "forge-std/Test.sol";
 //Fake contract to test that contracts can be set as authorized
 contract Awarder {
     function doAward(address reputationAddr, address seller, address requestAddr) external {
-        Reputation(reputationAddr).award(seller, requestAddr);
+        Reputation(reputationAddr).award(seller, requestAddr, 1);
     }
 }
 
@@ -54,7 +54,7 @@ contract ReputationTest is Test {
 
         // BUYER_1 awards SELLER
         vm.prank(BUYER_1);
-        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT, 1);
 
         assertEq(reputationContract.reputationOf(SELLER), 1, "Reputation should be +1 after award");
     }
@@ -65,7 +65,7 @@ contract ReputationTest is Test {
 
         // BUYER_2 penalizes SELLER
         vm.prank(BUYER_2);
-        reputationContract.penalize(SELLER, JUSTIFICATION_CONTRACT);
+        reputationContract.penalize(SELLER, JUSTIFICATION_CONTRACT, 1);
 
         assertEq(reputationContract.reputationOf(SELLER), -1, "Reputation should be -1 after penalize");
     }
@@ -78,7 +78,7 @@ contract ReputationTest is Test {
 
         // Grant BUYER_ROLE to OWNER and then award
         rolesContract.grantRole(rolesContract.BUYER_ROLE(), OWNER);
-        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT, 1);
 
         assertEq(reputationContract.reputationOf(SELLER), 1, "OWNER granted buyer role should be able to award");
         vm.stopPrank();
@@ -88,7 +88,7 @@ contract ReputationTest is Test {
     function test_RandomUser_CannotChangeReputation() public {
         vm.prank(RANDOM_USER);
         vm.expectRevert("authorized buyers only");
-        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT, 1);
 
         // Reputation remains unchanged
         assertEq(reputationContract.reputationOf(SELLER), 0, "Reputation must remain 0 after failed action");
@@ -107,7 +107,7 @@ contract ReputationTest is Test {
         reputationContract.authorizeBuyerOrContract(BUYER_1, true);
         // Increase by buyer first
         vm.prank(BUYER_1);
-        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT); // reputation = 1
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT, 1); // reputation = 1
 
         // OWNER (Roles admin) sets score to -10
         vm.prank(OWNER);
@@ -144,12 +144,12 @@ contract ReputationTest is Test {
 
         // BUYER_1 awards SELLER
         vm.prank(BUYER_1);
-        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT, 1);
 
         assertEq(reputationContract.reputationOf(SELLER), 1, "Reputation should be +1 after award");
 
         vm.prank(BUYER_1);
         vm.expectRevert("authorized buyers only");
-        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT);
+        reputationContract.award(SELLER, JUSTIFICATION_CONTRACT, 1);
     }
 }

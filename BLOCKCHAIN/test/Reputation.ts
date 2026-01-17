@@ -21,14 +21,10 @@ describe("Reputation", function () {
     await roles.waitForDeployment();
 
     const ReputationFactory = await ethers.getContractFactory("Reputation");
-    reputation = await ReputationFactory.connect(owner).deploy(
-      await roles.getAddress()
-    );
+    reputation = await ReputationFactory.connect(owner).deploy(await roles.getAddress());
     await reputation.waitForDeployment();
 
-    const AuditRepoFactory = await ethers.getContractFactory(
-      "AuditTaxRepository"
-    );
+    const AuditRepoFactory = await ethers.getContractFactory("AuditTaxRepository");
     const auditRepo = await AuditRepoFactory.connect(owner).deploy({
       value: 100n,
     });
@@ -50,42 +46,24 @@ describe("Reputation", function () {
       { value: 10n }
     );
     await request.waitForDeployment();
-    await auditRepo
-      .connect(owner)
-      .authorizeRequest(await request.getAddress(), true);
+    await auditRepo.connect(owner).authorizeRequest(await request.getAddress(), true);
 
-    await reputation
-      .connect(owner)
-      .authorizeBuyerOrContract(await request.getAddress(), true);
+    await reputation.connect(owner).authorizeBuyerOrContract(await request.getAddress(), true);
   });
 
   it("authorized can award and ReputationChanged is emitted", async function () {
-    await reputation
-      .connect(owner)
-      .authorizeBuyerOrContract(await buyer1.getAddress(), true);
+    await reputation.connect(owner).authorizeBuyerOrContract(await buyer1.getAddress(), true);
 
-    await expect(
-      reputation
-        .connect(buyer1)
-        .award(seller.address, await request.getAddress())
-    )
+    await expect(reputation.connect(buyer1).award(seller.address, await request.getAddress(), 1))
       .to.emit(reputation, "ReputationChanged")
-      .withArgs(
-        seller.address,
-        buyer1.address,
-        await request.getAddress(),
-        1,
-        1
-      );
+      .withArgs(seller.address, buyer1.address, await request.getAddress(), 1, 1);
 
     expect(await reputation.reputationOf(seller.address)).to.equal(1);
   });
 
   it("non-authorized cannot award (reverts)", async function () {
     await expect(
-      reputation
-        .connect(randomUser)
-        .award(seller.address, await request.getAddress())
+      reputation.connect(randomUser).award(seller.address, await request.getAddress(), 1)
     ).to.be.revertedWith("authorized buyers only");
   });
 

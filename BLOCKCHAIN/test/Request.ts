@@ -20,9 +20,7 @@ describe("Requests", function () {
     [owner, buyer, seller, auditor, randomUser] = await ethers.getSigners();
 
     // Deploy AuditTaxRepository (owner is `owner`)
-    const AuditRepoFactory = await ethers.getContractFactory(
-      "AuditTaxRepository"
-    );
+    const AuditRepoFactory = await ethers.getContractFactory("AuditTaxRepository");
     const auditRepo = await AuditRepoFactory.connect(owner).deploy({
       value: 100n,
     });
@@ -47,9 +45,7 @@ describe("Requests", function () {
 
     // Deploy Request as buyer
     const RequestFactory = await ethers.getContractFactory("Request");
-    const commandHash = ethers.keccak256(
-      ethers.toUtf8Bytes(commands.join(","))
-    );
+    const commandHash = ethers.keccak256(ethers.toUtf8Bytes(commands.join(",")));
 
     request = await RequestFactory.connect(buyer).deploy(
       commandHash,
@@ -71,55 +67,146 @@ describe("Requests", function () {
       .to.emit(request, "ExecutorAssigned")
       .withArgs(seller.address);
 
-    await expect(request.connect(owner).appointAuditor(auditor.address))
-      .to.emit(request, "AuditorAssigned")
-      .withArgs(auditor.address);
-
     // Executor submits wrong result
     const wrongHash = ethers.keccak256(ethers.toUtf8Bytes("wrong_result"));
     await expect(request.connect(seller).assignResult(wrongHash))
       .to.emit(request, "ResultAssigned")
       .withArgs(wrongHash, seller.address);
 
-    // Auditor submits correct result
+    // Buyer requests audit
+    await expect(request.connect(buyer).requestAudit("suspicious result"))
+      .to.emit(request, "AuditRequested")
+      .withArgs(buyer.address, "suspicious result");
+
+    // Admin assigns auditor
+    await expect(request.connect(owner).appointAuditor(auditor.address))
+      .to.emit(request, "AuditorAssigned")
+      .withArgs(auditor.address);
+
+    // Auditor submits correct result (different from executor)
     const correctHash = ethers.keccak256(ethers.toUtf8Bytes("correct_result"));
     await expect(request.connect(auditor).assignAuditResult(correctHash))
-      .to.emit(request, "FaultyCalculationDetected")
+      .to.emit(request, "AuditorResultAssigned")
+      .withArgs(correctHash, auditor.address)
+      .and.to.emit(request, "FaultyCalculationDetected")
       .withArgs(auditor.address, seller.address, wrongHash, correctHash);
 
+    // Verify state reset to Created
+    const info = await request.getInformation();
+    expect(info.state).to.equal(0); // State.Created
+
     // Penalize executor via admin (emit event from Reputation)
-    await expect(
-      reputation.connect(owner).penalize(seller.address, request.getAddress())
-    )
+    await expect(reputation.connect(owner).penalize(seller.address, request.getAddress(), 1))
       .to.emit(reputation, "ReputationChanged")
       .withArgs(seller.address, owner.address, request.getAddress(), -1, -1);
   });
 
   it("should emit events for successful workflow and awarding executor", async function () {
+    // Admin assigns executor
     await expect(request.connect(owner).appointExecutor(seller.address))
       .to.emit(request, "ExecutorAssigned")
       .withArgs(seller.address);
 
-    await expect(request.connect(owner).appointAuditor(auditor.address))
-      .to.emit(request, "AuditorAssigned")
-      .withArgs(auditor.address);
-
+    // Executor submits result
     const resultHash = ethers.keccak256(ethers.toUtf8Bytes("correct_result"));
     await expect(request.connect(seller).assignResult(resultHash))
       .to.emit(request, "ResultAssigned")
       .withArgs(resultHash, seller.address);
 
+    // Buyer requests audit
+    await expect(request.connect(buyer).requestAudit("want to verify"))
+      .to.emit(request, "AuditRequested")
+      .withArgs(buyer.address, "want to verify");
+
+    // Admin assigns auditor
+    await expect(request.connect(owner).appointAuditor(auditor.address))
+      .to.emit(request, "AuditorAssigned")
+      .withArgs(auditor.address);
+
+    // Auditor submits same result (matches executor)
     await expect(request.connect(auditor).assignAuditResult(resultHash))
       .to.emit(request, "AuditorResultAssigned")
-      .withArgs(resultHash, auditor.address)
-      .and.to.emit(request, "RequestFinished")
+      .withArgs(resultHash, auditor.address);
+
+    // Verify state is now Audited (5)
+    let info = await request.getInformation();
+    expect(info.state).to.equal(5); // State.Audited
+
+    // Admin completes the request
+    await expect(request.connect(owner).completeRequest())
+      .to.emit(request, "RequestFinished")
       .withArgs(seller.address, auditor.address, resultHash);
 
+    // Verify state is now Completed (6)
+    info = await request.getInformation();
+    expect(info.state).to.equal(6); // State.Completed
+
     // Admin awards executor
-    await expect(
-      reputation.connect(owner).award(seller.address, request.getAddress())
-    )
+    await expect(reputation.connect(owner).award(seller.address, request.getAddress(), 1))
       .to.emit(reputation, "ReputationChanged")
       .withArgs(seller.address, owner.address, request.getAddress(), 1, 1);
+  });
+
+  it("should complete without audit when no audit requested", async function () {
+    // Admin assigns executor
+    await request.connect(owner).appointExecutor(seller.address);
+
+    // Executor submits result
+    const resultHash = ethers.keccak256(ethers.toUtf8Bytes("result"));
+    await request.connect(seller).assignResult(resultHash);
+
+    // Verify state is ResultSubmitted (2)
+    let info = await request.getInformation();
+    expect(info.state).to.equal(2); // State.ResultSubmitted
+
+    // Admin completes without audit
+    await expect(request.connect(owner).completeRequest())
+      .to.emit(request, "RequestFinished")
+      .withArgs(seller.address, ethers.ZeroAddress, resultHash);
+
+    // Verify completed
+    info = await request.getInformation();
+    expect(info.state).to.equal(6); // State.Completed
+  });
+
+  it("should use ground truth on retry after faulty result", async function () {
+    // First attempt - executor submits wrong result
+    await request.connect(owner).appointExecutor(seller.address);
+    const wrongHash = ethers.keccak256(ethers.toUtf8Bytes("wrong"));
+    await request.connect(seller).assignResult(wrongHash);
+
+    // Buyer requests audit
+    await request.connect(buyer).requestAudit("check this");
+    await request.connect(owner).appointAuditor(auditor.address);
+
+    // Auditor establishes ground truth
+    const correctHash = ethers.keccak256(ethers.toUtf8Bytes("correct"));
+    await request.connect(auditor).assignAuditResult(correctHash);
+
+    // State should be back to Created
+    let info = await request.getInformation();
+    expect(info.state).to.equal(0); // State.Created
+    expect(info.auditorResultHash_).to.equal(correctHash); // Ground truth stored
+
+    // Second attempt - new executor
+    const seller2 = randomUser;
+    await roles.connect(owner).grantRole(await roles.SELLER_ROLE(), seller2.address);
+    await request.connect(owner).appointExecutor(seller2.address);
+
+    // New executor submits correct result matching ground truth
+    await expect(request.connect(seller2).assignResult(correctHash))
+      .to.emit(request, "ResultAssigned")
+      .withArgs(correctHash, seller2.address)
+      .and.to.emit(request, "FaultyCalculationFixed")
+      .withArgs(auditor.address, seller2.address);
+
+    // Should jump directly to Audited state
+    info = await request.getInformation();
+    expect(info.state).to.equal(5); // State.Audited
+
+    // Can complete now
+    await expect(request.connect(owner).completeRequest())
+      .to.emit(request, "RequestFinished")
+      .withArgs(seller2.address, auditor.address, correctHash);
   });
 });

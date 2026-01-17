@@ -439,7 +439,6 @@ contract RequestTest is Test {
         vm.startPrank(OWNER);
         auditTaxRepository.authorizeRequest(address(requestContract), true);
         requestContract.appointExecutor(payable(SELLER_1));
-        requestContract.appointAuditor(payable(SELLER_2));
         vm.stopPrank();
 
         // Ensure deterministic starting balances
@@ -455,9 +454,17 @@ contract RequestTest is Test {
         vm.prank(SELLER_1);
         requestContract.assignResult(resultHash);
 
+        vm.startPrank(OWNER);
+        requestContract.requestAudit("requested");
+        requestContract.appointAuditor(payable(SELLER_2));
+        vm.stopPrank();
+
         // Auditor posts same result -> auditor paid (from repo) and executor paid (from contract)
         vm.prank(SELLER_2);
         requestContract.assignAuditResult(resultHash);
+
+        vm.prank(OWNER);
+        requestContract.completeRequest();
 
         uint256 execAfter = address(SELLER_1).balance;
         uint256 auditorAfter = address(SELLER_2).balance;
@@ -476,7 +483,6 @@ contract RequestTest is Test {
         vm.startPrank(OWNER);
         auditTaxRepository.authorizeRequest(address(requestContract), true);
         requestContract.appointExecutor(payable(SELLER_1));
-        requestContract.appointAuditor(payable(SELLER_2));
         vm.stopPrank();
 
         // Setup deterministic balances
@@ -491,6 +497,11 @@ contract RequestTest is Test {
         bytes32 executorHash = keccak256("executor_wrong");
         vm.prank(SELLER_1);
         requestContract.assignResult(executorHash);
+        
+        vm.startPrank(OWNER);
+        requestContract.requestAudit("requested");
+        requestContract.appointAuditor(payable(SELLER_2));
+        vm.stopPrank();
 
         // Auditor posts a different (correct) result -> mismatch: auditor still gets paid, executor not paid
         bytes32 auditorHash = keccak256("auditor_correct");
