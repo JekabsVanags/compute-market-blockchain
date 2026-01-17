@@ -70,6 +70,7 @@ interface Task {
   auditorAccountIndex?: number;     // Auditor's account index (0-19).
   auditorResult?: string;           // Auditor's computation result.
   auditCompletedAt?: string;        // ISO timestamp when audit was completed.
+  auditorZipData?: string;          // Auditor's ZIP data (base64).
 }
 
 const tasks = new Map<string, Task>();  // Key: contract address, Value: Task
@@ -618,12 +619,12 @@ app.post('/tasks/:address/request-audit', async (req: Request, res: Response) =>
 // In full workflow: Would call contract.assignAuditorResult() for on-chain verification.
 // Supports two formats (same as /complete):
 // - Legacy: { "result": "6", "accountIndex": 2 }
-// - Structured: { "stdout": "...", "stderr": "...", "exitCode": 0, "accountIndex": 2 }
+// - Structured: { "stdout": "...", "stderr": "...", "exitCode": 0, "zipData": "base64...", "accountIndex": 2 }
 // Response: { "success": true, "task": { ... }, "reputationChange": +10 or -10 }
 app.post('/tasks/:address/submit-audit-result', async (req: Request, res: Response) => {
   try {
     const { address } = req.params;
-    const { result, accountIndex, stdout, stderr, exitCode } = req.body;
+    const { result, accountIndex, stdout, stderr, exitCode, zipData } = req.body;
 
     // Validate required fields (either legacy result or new structured format):
     const hasLegacyFormat = result !== undefined;
@@ -684,6 +685,11 @@ app.post('/tasks/:address/submit-audit-result', async (req: Request, res: Respon
       if (stderr) combinedResult += `STDERR:\n${stderr}\n`;
       if (exitCode !== undefined) combinedResult += `EXIT_CODE: ${exitCode}`;
       task.auditorResult = combinedResult;
+    }
+
+    // Store zipData if provided:
+    if (zipData) {
+      task.auditorZipData = zipData;
     }
 
     // Compare auditor's result with executor's result:
