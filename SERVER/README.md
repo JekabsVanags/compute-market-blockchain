@@ -142,13 +142,17 @@ cd SERVER
 
 # Test 2 – audit and reputation flow:
 ./test-audit-flow.sh
+
+# Test 3 – reputation persistence (run after test 2):
+./test-reputation-persistence.sh
 ```
 
-Both scripts automatically:
+These scripts automatically:
 - Grant SELLER_ROLE to accounts 1 and 2.
 - Execute the complete workflow.
 - Validate balances and escrow payments.
-- Verify reputation changes.
+- Verify reputation changes on blockchain.
+- Confirm reputation persists (not lost on server restart).
 
 **Note:** These scripts require the blockchain and server to be running (see steps 1-4 above).
 
@@ -506,7 +510,7 @@ Expected response example:
 }
 ```
 
-Note: Reputation starts at 0. Increases by +10 for passing audits, decreases by -10 for failing audits. Auditors earn +2 for each audit performed.
+Note: Reputation is stored on-chain in the Reputation.sol contract. Scores start at 0, increase by +10 for passing audits, decrease by -10 for failing audits. Auditors earn +2 for each audit performed.
 
 **Verify final task state** - check complete task details:
 ```bash

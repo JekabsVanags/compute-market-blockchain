@@ -9,6 +9,7 @@ import { ethers } from 'ethers';
 // The compiled Request contract (ABI + bytecode):
 import RequestArtifact from '../../BLOCKCHAIN/artifacts/contracts/Request.sol/Request.json';
 import AuditTaxRepositoryArtifact from '../../BLOCKCHAIN/artifacts/contracts/AuditTaxRepository.sol/AuditTaxRepository.json';
+import ReputationArtifact from '../../BLOCKCHAIN/artifacts/contracts/Reputation.sol/Reputation.json';
 
 // Configuration needed to connect to blockchain and deploy contracts:
 export interface BlockchainConfig {
@@ -263,4 +264,64 @@ export async function sendPayment(
     transactionHash: receipt.hash,
     blockNumber: receipt.blockNumber
   };
+}
+
+/**
+ * Update reputation on the Reputation contract:
+ * @param config - Blockchain configuration.
+ * @param sellerAddress - Address of the seller whose reputation to update.
+ * @param requestAddress - Address of the Request contract (used as justification).
+ * @param delta - Reputation change (positive for award, negative for penalize).
+ * @returns Transaction hash and block number.
+ */
+export async function updateReputation(
+  config: BlockchainConfig,
+  sellerAddress: string,
+  requestAddress: string,
+  delta: number
+): Promise<{ transactionHash: string; blockNumber: number }> {
+  const provider = createProvider(config.rpcUrl);
+  const wallet = createWallet(config.privateKey, provider);
+
+  // Create contract instance at the Reputation contract address:
+  const contract = new ethers.Contract(config.reputationAddress, ReputationArtifact.abi, wallet);
+
+  // Call award or penalize based on delta sign:
+  let tx;
+  if (delta >= 0) {
+    // Positive delta – award reputation:
+    tx = await contract.award(sellerAddress, requestAddress, Math.abs(delta));
+  } else {
+    // Negative delta – penalize reputation:
+    tx = await contract.penalize(sellerAddress, requestAddress, Math.abs(delta));
+  }
+
+  const receipt = await tx.wait();
+
+  return {
+    transactionHash: tx.hash,
+    blockNumber: receipt.blockNumber
+  };
+}
+
+/**
+ * Get reputation score from the Reputation contract:
+ * @param config - Blockchain configuration.
+ * @param address - Address to check reputation for.
+ * @returns Reputation score as a number.
+ */
+export async function getReputation(
+  config: BlockchainConfig,
+  address: string
+): Promise<number> {
+  const provider = createProvider(config.rpcUrl);
+
+  // Create contract instance at the Reputation contract address:
+  const contract = new ethers.Contract(config.reputationAddress, ReputationArtifact.abi, provider);
+
+  // Call reputationOf (view function, doesn't need wallet):
+  const reputation = await contract.reputationOf(address);
+
+  // Convert BigInt to number:
+  return Number(reputation);
 }

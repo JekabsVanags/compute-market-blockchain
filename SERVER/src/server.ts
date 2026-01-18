@@ -25,7 +25,9 @@ import {
   getHardhatAccounts,
   sendPayment,
   BlockchainConfig,
-  callRequestContractMethod
+  callRequestContractMethod,
+  updateReputation,
+  getReputation
 } from './blockchain-service';
 
 // Load environment variables from .env file:
@@ -82,10 +84,6 @@ interface Task {
 }
 
 const tasks = new Map<string, Task>();  // Key: contract address, Value: Task
-
-// In-memory reputation storage:
-// Tracks reputation scores for seller addresses (integer score in memory for MVP purposes, can be migrated to call Reputation smart contract later).
-const reputationScores = new Map<string, number>(); // Key: seller address, Value: reputation score
 
 // Hardhat private keys array (for account index lookup):
 const HARDHAT_PRIVATE_KEYS = [
@@ -786,28 +784,27 @@ app.post('/tasks/:address/submit-audit-result', async (req: Request, res: Respon
 
     let reputationChange = 0;
     const executorAddress = task.executor!;
+    // Use account #0 (admin) for reputation updates since it has ADMIN_ROLE:
+    const adminConfig = getBlockchainConfig(0);
 
     if (resultsMatch) {
       // Audit passed – executor was honest, increase their reputation:
       task.status = 'audit_passed';
       reputationChange = 10;
 
-      // Update executor's reputation:
-      const currentReputation = reputationScores.get(executorAddress) || 0;
-      reputationScores.set(executorAddress, currentReputation + reputationChange);
+      // Update executor's reputation on blockchain:
+      await updateReputation(adminConfig, executorAddress, task.address, reputationChange);
     } else {
       // Audit failed – executor was dishonest, decrease their reputation:
       task.status = 'audit_failed';
       reputationChange = -10;
 
-      // Update executor's reputation:
-      const currentReputation = reputationScores.get(executorAddress) || 0;
-      reputationScores.set(executorAddress, currentReputation + reputationChange);
+      // Update executor's reputation on blockchain:
+      await updateReputation(adminConfig, executorAddress, task.address, reputationChange);
     }
 
     // Award small reputation bonus to auditor for doing the verification work:
-    const auditorReputation = reputationScores.get(auditorAddress) || 0;
-    reputationScores.set(auditorAddress, auditorReputation + 2);
+    await updateReputation(adminConfig, auditorAddress, task.address, 2);
 
     res.json({
       success: true,
@@ -851,8 +848,9 @@ app.get('/reputation/:address', async (req: Request, res: Response) => {
       });
     }
 
-    // Get reputation from in-memory storage (defaults to 0 if never seen):
-    const reputation = reputationScores.get(address) || 0;
+    // Get reputation from blockchain (using account #0 config for read-only access):
+    const config = getBlockchainConfig(0);
+    const reputation = await getReputation(config, address);
 
     res.json({
       address,
