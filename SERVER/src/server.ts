@@ -175,14 +175,25 @@ app.get('/health', async (req: Request, res: Response) => {
 });
 
 // GET /accounts - Get all Hardhat test accounts:
-// Returns the 20 pre-funded Hardhat accounts with balances.
+// Returns the 20 pre-funded Hardhat accounts with balances and reputation scores.
 // Frontend can display these for demo account selection.
 app.get('/accounts', async (req: Request, res: Response) => {
   try {
     const config = getBlockchainConfig();
     const accounts = await getHardhatAccounts(config.rpcUrl);
 
-    res.json({ accounts });
+    // Enhance each account with reputation score from blockchain:
+    const accountsWithReputation = await Promise.all(
+      accounts.map(async (account) => {
+        const reputation = await getReputation(config, account.address);
+        return {
+          ...account,
+          reputation
+        };
+      })
+    );
+
+    res.json({ accounts: accountsWithReputation });
   } catch (error: any) {
     console.error('Error fetching accounts:', error);
 

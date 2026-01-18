@@ -1,5 +1,10 @@
 #!/bin/bash
 # Test script for audit and reputation endpoints:
+# - Tests automatic task assignment (no manual assignment needed).
+# - Tests complete audit flow (request → auditor verification → reputation updates).
+# - Verifies reputation changes (+10 executor, +2 auditor).
+# - Works correctly with accumulated reputation from previous test runs.
+# - Verifies /accounts endpoint includes reputation and matches /reputation/:address endpoints.
 
 set -e # Exit on any error.
 
@@ -30,16 +35,24 @@ cd ../SERVER
 echo "✓ Authorized."
 echo ""
 
-echo "2. Assigning task to executor (account #1)..."
-curl -s -X POST http://localhost:3000/tasks/$ADDRESS/assign \
-  -H "Content-Type: application/json" \
-  -d '{"accountIndex": 1}' | jq '.'
+echo "2. Verifying task was automatically assigned..."
+TASK_STATUS=$(curl -s http://localhost:3000/tasks/$ADDRESS)
+EXECUTOR=$(echo $TASK_STATUS | jq -r '.task.executor')
+EXECUTOR_INDEX=$(echo $TASK_STATUS | jq -r '.task.executorAccountIndex')
+
+# Record initial reputations before audit:
+INITIAL_EXEC_REP=$(curl -s http://localhost:3000/reputation/$EXECUTOR | jq -r '.reputation')
+INITIAL_AUDIT_REP=$(curl -s http://localhost:3000/accounts | jq -r '.accounts[2].reputation')
+
+echo "✓ Task automatically assigned to account #$EXECUTOR_INDEX ($EXECUTOR)."
+echo "  Initial executor reputation: $INITIAL_EXEC_REP"
+echo "  Initial auditor reputation: $INITIAL_AUDIT_REP"
 echo ""
 
-echo "3. Completing task (executor submits result '10')..."
+echo "3. Completing task (executor account #$EXECUTOR_INDEX submits result '10')..."
 curl -s -X POST http://localhost:3000/tasks/$ADDRESS/complete \
   -H "Content-Type: application/json" \
-  -d '{"stdout": "10", "stderr": "", "exitCode": 0, "accountIndex": 1}' | jq '.'
+  -d "{\"stdout\": \"10\", \"stderr\": \"\", \"exitCode\": 0, \"accountIndex\": $EXECUTOR_INDEX}" | jq '.'
 echo ""
 
 echo "4. Requesting audit (buyer doesn't trust result)..."
@@ -54,14 +67,40 @@ curl -s -X POST http://localhost:3000/tasks/$ADDRESS/submit-audit-result \
   -d '{"stdout": "10", "stderr": "", "exitCode": 0, "accountIndex": 2}' | jq '.'
 echo ""
 
-echo "6. Checking executor reputation (should be +10)..."
-EXECUTOR_ADDR=$(curl -s http://localhost:3000/accounts | jq -r '.accounts[1].address')
-curl -s http://localhost:3000/reputation/$EXECUTOR_ADDR | jq '.'
+echo "6. Checking executor (account #$EXECUTOR_INDEX) reputation (should be +10)..."
+FINAL_EXEC_REP=$(curl -s http://localhost:3000/reputation/$EXECUTOR | jq -r '.reputation')
+EXEC_CHANGE=$((FINAL_EXEC_REP - INITIAL_EXEC_REP))
+echo "  Initial: $INITIAL_EXEC_REP → Final: $FINAL_EXEC_REP (change: +$EXEC_CHANGE)"
 echo ""
 
 echo "7. Checking auditor reputation (should be +2)..."
 AUDITOR_ADDR=$(curl -s http://localhost:3000/accounts | jq -r '.accounts[2].address')
-curl -s http://localhost:3000/reputation/$AUDITOR_ADDR | jq '.'
+FINAL_AUDIT_REP=$(curl -s http://localhost:3000/reputation/$AUDITOR_ADDR | jq -r '.reputation')
+AUDIT_CHANGE=$((FINAL_AUDIT_REP - INITIAL_AUDIT_REP))
+echo "  Initial: $INITIAL_AUDIT_REP → Final: $FINAL_AUDIT_REP (change: +$AUDIT_CHANGE)"
+echo ""
+
+echo "8. Verifying /accounts endpoint also shows updated reputations..."
+ACCOUNTS_EXEC_REP=$(curl -s http://localhost:3000/accounts | jq -r ".accounts[$EXECUTOR_INDEX].reputation")
+ACCOUNTS_AUDIT_REP=$(curl -s http://localhost:3000/accounts | jq -r '.accounts[2].reputation')
+echo "  Executor (account #$EXECUTOR_INDEX) from /accounts: $ACCOUNTS_EXEC_REP"
+echo "  Auditor (account #2) from /accounts: $ACCOUNTS_AUDIT_REP"
+
+# Verify reputation changes are correct:
+if [ "$EXEC_CHANGE" -eq 10 ] && [ "$AUDIT_CHANGE" -eq 2 ]; then
+  echo "✓ Reputation changes correct – executor +10, auditor +2."
+else
+  echo "✗ Reputation change mismatch! Expected executor +10, auditor +2, got +$EXEC_CHANGE and +$AUDIT_CHANGE."
+  exit 1
+fi
+
+# Verify /accounts matches /reputation endpoints:
+if [ "$ACCOUNTS_EXEC_REP" -eq "$FINAL_EXEC_REP" ] && [ "$ACCOUNTS_AUDIT_REP" -eq "$FINAL_AUDIT_REP" ]; then
+  echo "✓ /accounts endpoint correctly matches /reputation endpoints."
+else
+  echo "✗ /accounts endpoint mismatch with /reputation endpoints!"
+  exit 1
+fi
 echo ""
 
 echo "Test complete!"

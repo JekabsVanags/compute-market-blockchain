@@ -1,5 +1,9 @@
 #!/bin/bash
 # Full workflow test including role setup and escrow validation:
+# - Tests automatic task assignment (no manual assignment needed).
+# - Tests complete workflow: create → auto-assign → complete → finalize.
+# - Verifies escrow payment from buyer to executor.
+# - Works with dynamically assigned executor (not hardcoded to account #1).
 
 set -e # Exit on any error.
 
@@ -36,10 +40,8 @@ echo ""
 echo -e "${BLUE}Step 2: Recording initial balances...${NC}"
 INITIAL_BALANCES=$(curl -s http://localhost:3000/accounts)
 BUYER_INITIAL=$(echo "$INITIAL_BALANCES" | jq -r '.accounts[0].balance')
-SELLER_INITIAL=$(echo "$INITIAL_BALANCES" | jq -r '.accounts[1].balance')
 echo "Buyer (account #0): $BUYER_INITIAL ETH"
-echo "Seller (account #1): $SELLER_INITIAL ETH"
-echo -e "${GREEN}✓ Balances recorded.${NC}"
+echo -e "${GREEN}✓ Buyer balance recorded.${NC}"
 echo ""
 
 # Step 3 – create task:
@@ -57,24 +59,30 @@ echo "Task created at: $TASK_ADDRESS"
 echo -e "${GREEN}✓ Task created (escrow locked).${NC}"
 echo ""
 
-# Step 4 – assign task:
-echo -e "${BLUE}Step 4: Assigning task to executor (account #1)...${NC}"
-curl -s -X POST http://localhost:3000/tasks/$TASK_ADDRESS/assign \
-  -H "Content-Type: application/json" \
-  -d '{"accountIndex": 1}' | jq '.'
-echo -e "${GREEN}✓ Task assigned.${NC}"
+# Step 4 – verify automatic assignment and record executor's initial balance:
+echo -e "${BLUE}Step 4: Verifying task was automatically assigned...${NC}"
+TASK_STATUS=$(curl -s http://localhost:3000/tasks/$TASK_ADDRESS)
+EXECUTOR=$(echo "$TASK_STATUS" | jq -r '.task.executor')
+EXECUTOR_INDEX=$(echo "$TASK_STATUS" | jq -r '.task.executorAccountIndex')
+
+# Record executor's initial balance:
+SELLER_INITIAL=$(echo "$INITIAL_BALANCES" | jq -r ".accounts[$EXECUTOR_INDEX].balance")
+
+echo "Executor: $EXECUTOR (account #$EXECUTOR_INDEX)"
+echo "Executor initial balance: $SELLER_INITIAL ETH"
+echo -e "${GREEN}✓ Task automatically assigned to account #$EXECUTOR_INDEX.${NC}"
 echo ""
 
 # Step 5 – complete task:
-echo -e "${BLUE}Step 5: Completing task (executor submits result)...${NC}"
+echo -e "${BLUE}Step 5: Completing task (executor account #$EXECUTOR_INDEX submits result)...${NC}"
 curl -s -X POST http://localhost:3000/tasks/$TASK_ADDRESS/complete \
   -H "Content-Type: application/json" \
-  -d '{
-    "stdout": "10",
-    "stderr": "",
-    "exitCode": 0,
-    "accountIndex": 1
-  }' | jq '.'
+  -d "{
+    \"stdout\": \"10\",
+    \"stderr\": \"\",
+    \"exitCode\": 0,
+    \"accountIndex\": $EXECUTOR_INDEX
+  }" | jq '.'
 echo -e "${GREEN}✓ Task completed.${NC}"
 echo ""
 
@@ -93,13 +101,13 @@ echo ""
 echo -e "${BLUE}Step 7: Verifying final balances...${NC}"
 FINAL_BALANCES=$(curl -s http://localhost:3000/accounts)
 BUYER_FINAL=$(echo "$FINAL_BALANCES" | jq -r '.accounts[0].balance')
-SELLER_FINAL=$(echo "$FINAL_BALANCES" | jq -r '.accounts[1].balance')
+SELLER_FINAL=$(echo "$FINAL_BALANCES" | jq -r ".accounts[$EXECUTOR_INDEX].balance")
 
 echo "Buyer (account #0):"
 echo "  Initial: $BUYER_INITIAL ETH"
 echo "  Final:   $BUYER_FINAL ETH"
 
-echo "Seller (account #1):"
+echo "Executor (account #$EXECUTOR_INDEX):"
 echo "  Initial: $SELLER_INITIAL ETH"
 echo "  Final:   $SELLER_FINAL ETH"
 
@@ -109,14 +117,14 @@ SELLER_GAINED=$(echo "$SELLER_FINAL - $SELLER_INITIAL" | bc)
 
 echo ""
 echo "Buyer spent: ~$BUYER_SPENT ETH (0.5 task + 0.0556 audit tax + gas)"
-echo "Seller gained: ~$SELLER_GAINED ETH (0.5 task payment from escrow - gas)"
+echo "Executor gained: ~$SELLER_GAINED ETH (0.5 task payment from escrow - gas)"
 
-# Validate seller received approximately 0.5 ETH:
+# Validate executor received approximately 0.5 ETH:
 SELLER_GAIN_CHECK=$(echo "$SELLER_GAINED > 0.49 && $SELLER_GAINED < 0.51" | bc)
 if [ "$SELLER_GAIN_CHECK" -eq 1 ]; then
-  echo -e "${GREEN}✓ Escrow payment verified (seller received ~0.5 ETH).${NC}"
+  echo -e "${GREEN}✓ Escrow payment verified (executor received ~0.5 ETH).${NC}"
 else
-  echo "ERROR: Seller did not receive expected payment! Got: $SELLER_GAINED ETH"
+  echo "ERROR: Executor did not receive expected payment! Got: $SELLER_GAINED ETH"
   exit 1
 fi
 

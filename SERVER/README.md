@@ -148,6 +148,9 @@ cd SERVER
 
 # Test 4 – automatic assignment on task creation:
 ./test-auto-assignment-on-create.sh
+
+# Test 5 – /accounts endpoint (includes reputation for frontend):
+./test-accounts-reputation.sh
 ```
 
 These scripts automatically:
@@ -157,6 +160,7 @@ These scripts automatically:
 - Verify reputation changes on blockchain.
 - Confirm reputation persists (not lost on server restart).
 - Verify automatic assignment on task creation with epsilon-greedy algorithm and executor access control.
+- Verify /accounts endpoint includes reputation field for all accounts.
 
 **Note:** These scripts require the blockchain and server to be running (see steps 1-4 above).
 
@@ -204,7 +208,7 @@ Expected response example:
 }
 ```
 
-**GET /accounts** - get all Hardhat test accounts with balances:
+**GET /accounts** - get all Hardhat test accounts with balances and reputation:
 ```bash
 curl http://localhost:3000/accounts | jq '.accounts[0:3]'
 ```
@@ -215,22 +219,27 @@ Expected response example (showing first 3 accounts):
   {
     "index": 0,
     "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-    "balance": "9999.997749360343944429"
+    "balance": "9999.997749360343944429",
+    "reputation": 0
   },
   {
     "index": 1,
     "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "balance": "10000.0"
+    "balance": "10000.0",
+    "reputation": 10
   },
   {
     "index": 2,
     "address": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-    "balance": "10000.0"
+    "balance": "10000.0",
+    "reputation": 2
   }
 ]
 ```
 
-Note: Account #0 has slightly less than 10000 ETH because it was used to deploy the core contracts (gas fees).
+Notes:
+- Account #0 has slightly less than 10000 ETH because it was used to deploy the core contracts (gas fees).
+- Each account includes its on-chain reputation score, allowing frontends to display user reputation without additional API calls.
 
 **POST /tasks** - create new compute task (buyer deploys Request contract with payment and task is automatically assigned):
 ```bash
@@ -655,6 +664,7 @@ compute-market-blockchain/
     ├── test-audit-flow.sh                 # Automated audit & reputation test.
     ├── test-reputation-persistence.sh     # Verify reputation persists on blockchain.
     ├── test-auto-assignment-on-create.sh  # Verify automatic assignment on task creation.
+    ├── test-accounts-reputation.sh        # Verify /accounts includes reputation.
     ├── .env                               # Your configuration (git-ignored).
     └── .env.example                       # Template.
 ```
@@ -670,6 +680,7 @@ The local blockchain resets completely when you restart it (all accounts go back
 
 **Testing:** After setup, use the automated test scripts (see "Automated unit tests" section above):
 - `./test-full-workflow.sh` - Validates escrow payments.
-- `./test-audit-flow.sh` - Validates audit and reputation system.
+- `./test-audit-flow.sh` - Validates audit and reputation system (includes /accounts endpoint check).
 - `./test-reputation-persistence.sh` - Confirms reputation is stored on blockchain.
 - `./test-auto-assignment-on-create.sh` - Verifies automatic assignment on task creation with epsilon-greedy algorithm.
+- `./test-accounts-reputation.sh` - Verifies /accounts endpoint includes reputation for all accounts.
