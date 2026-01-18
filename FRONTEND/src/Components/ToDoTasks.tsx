@@ -1,7 +1,15 @@
 import type { TaskData } from "QUERIES/tasksGet";
 import { useState, type FC } from "react";
 import style from "VIEWS/account.module.scss";
-import SubmitResultModal from "./SubmitResultModal";
+import Modal from "./Modal";
+
+const renderPrice = (price: string | number, status: string) => {
+  if (status === 'finalized') {
+    return <span style={{ color: '#008000', fontWeight: 700 }}>+ {price}</span>;
+  }
+
+  return <span>{price}</span>;
+};
 
 interface Props {
   accountToDoTasks: TaskData[];
@@ -23,7 +31,7 @@ const ToDoTasks:FC<Props> = ({
               <th>Price</th>
               <th>Status</th>
               <th>Created At</th>
-              <th>Submit result</th>
+              <th>Task info</th>
             </tr>
           </thead>
 
@@ -43,31 +51,22 @@ const ToDoTasks:FC<Props> = ({
                 <>
                   <tr key={task.address}>
                     <td>{task.address}</td>
-                    <td>{task.price}</td>
+                    <td>{renderPrice(task.price, task.status)}</td>
                     <td>{task.status}</td>
                     <td>{formatted}</td>
-                    <td>
-                      { 'waiting' === task.status ? (
-                        <button
-                          key={task.address}
-                          onClick={() => setSelectedTaskAddress(task.address)}
-                        >
-                          Send result of the task
-                        </button>
-                      ) : (
-                        <span>
-                          Result already submited
-                        </span>
-                      )
-                      }
-                    </td>
+                    <td><button
+                      key={task.address}
+                      onClick={() => setSelectedTaskAddress(task.address)}
+                    >
+                      Open Info
+                    </button></td>
                   </tr>
                 </>
               )})}
           </tbody>
         </table>
         {selectedTaskAddress !== null && (
-          <SubmitResultModal
+          <Modal
             isOpen={selectedTaskAddress !== null}
             address={selectedTaskAddress ?? ''}
             onClose={() => setSelectedTaskAddress(null)}

@@ -59,3 +59,79 @@
   border-radius: 6px;
   color: '#fff';
 }
+
+
+.label {
+  font-weight: 600;
+  min-width: 220px;
+}
+
+.value {
+  word-break: break-all;
+}
+
+.code {
+  background: #f6f6f6;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tabs button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  cursor: pointer;
+}
+
+.activeTab {
+  background: #000;
+  color: #fff;
+}
+
+.tabContent {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.codeBlock,
+.outputBlock,
+.errorBlock {
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.codeBlock {
+  background: #c2cbda;
+}
+
+.outputBlock {
+  background: #c2cbda;
+}
+
+.errorBlock {
+  background: #c2cbda;
+  color: #a00000;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+}

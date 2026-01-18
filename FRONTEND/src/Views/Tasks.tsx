@@ -23,6 +23,7 @@ const Tasks = () => {
 
   return (
     <div>
+      <h4>{"Legacy task assignment. Use only if auto-assignment returns errors"}</h4>
       <div className={style.tableWrapper}>
         <table className={style.table}>
           <thead>

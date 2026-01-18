@@ -6,6 +6,7 @@ export interface AccountData {
   index: number;
   address: string;
   balance: string;
+  reputation: number;
 }
 
 interface Response {
@@ -20,4 +21,6 @@ const getAccounts = async (): Promise<Response> => {
 export const useGetAccounts = () => useQuery<Response, Error>({
   queryKey: ['Accounts'],
   queryFn: () => getAccounts(),
+  refetchInterval: 5000,
+  refetchIntervalInBackground: true
 });
