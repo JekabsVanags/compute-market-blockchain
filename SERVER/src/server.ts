@@ -247,6 +247,33 @@ app.post('/tasks', async (req: Request, res: Response) => {
 
     tasks.set(result.address, task);
 
+    // Automatically assign task using epsilon-greedy algorithm:
+    // This ensures executors can immediately start working on the task.
+    try {
+      const sellerAccountIndices = [1, 2]; // Default sellers (can be made configurable).
+      const epsilon = 0.1; // Default epsilon (10% random seller, 90% top seller by reputation).
+
+      const selectedSeller = await selectExecutorEpsilonGreedy(config, sellerAccountIndices, epsilon);
+
+      // Call blockchain to appoint executor:
+      const buyerConfig = getBlockchainConfig(buyerAccountIndex);
+      await callRequestContractMethod(
+        task.address,
+        buyerConfig,
+        'appointExecutor',
+        [selectedSeller.address]
+      );
+
+      // Update task with assigned executor:
+      task.executor = selectedSeller.address;
+      task.executorAccountIndex = selectedSeller.accountIndex;
+
+      console.log(`Task ${task.address} auto-assigned to account #${selectedSeller.accountIndex} (reputation: ${selectedSeller.reputation})`);
+    } catch (error: any) {
+      console.error('Warning: Auto-assignment failed:', error.message);
+      // Task remains unassigned, but still created - manual assignment still possible.
+    }
+
     // Return the created task:
     res.status(201).json({
       success: true,
@@ -260,6 +287,9 @@ app.post('/tasks', async (req: Request, res: Response) => {
         status: task.status,
         blockNumber: task.blockNumber,
         createdAt: task.createdAt,
+        // Include executor if auto-assigned:
+        ...(task.executor && { executor: task.executor }),
+        ...(task.executorAccountIndex !== undefined && { executorAccountIndex: task.executorAccountIndex }),
         // Include computational requirements if provided:
         ...(task.floatingPointStandard && { floatingPointStandard: task.floatingPointStandard }),
         ...(task.processingPowerMHz && { processingPowerMHz: task.processingPowerMHz }),
