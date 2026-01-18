@@ -3,6 +3,7 @@
 # - Tests automatic task assignment (no manual assignment needed).
 # - Tests complete workflow: create → auto-assign → complete → finalize.
 # - Verifies escrow payment from buyer to executor.
+# - Verifies executor receives +10 reputation for successful completion.
 # - Works with dynamically assigned executor (not hardcoded to account #1).
 
 set -e # Exit on any error.
@@ -134,6 +135,20 @@ if [ "$BUYER_SPENT_CHECK" -eq 1 ]; then
   echo -e "${GREEN}✓ No double payment (buyer spent < 0.7 ETH total).${NC}"
 else
   echo "ERROR: Buyer may have paid twice! Spent: $BUYER_SPENT ETH"
+  exit 1
+fi
+
+echo ""
+
+# Step 8 – verify executor received reputation for successful completion:
+echo -e "${BLUE}Step 8: Verifying executor reputation was awarded...${NC}"
+EXECUTOR_REP=$(curl -s http://localhost:3000/reputation/$EXECUTOR | jq -r '.reputation')
+echo "Executor (account #$EXECUTOR_INDEX) reputation: $EXECUTOR_REP"
+
+if [ "$EXECUTOR_REP" -ge 10 ]; then
+  echo -e "${GREEN}✓ Executor received reputation (+10 for successful completion).${NC}"
+else
+  echo "ERROR: Executor reputation not awarded! Expected at least 10, got: $EXECUTOR_REP"
   exit 1
 fi
 

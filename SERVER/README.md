@@ -435,6 +435,9 @@ Expected response example:
 ```
 
 **POST /tasks/:address/finalize** - buyer finalizes task and pays seller:
+- Releases escrow payment to executor (calls contract.completeRequest).
+- Awards +10 reputation to executor for successful completion (calls Reputation.award).
+
 ```bash
 curl -X POST http://localhost:3000/tasks/0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9/finalize \
   -H "Content-Type: application/json" \
@@ -589,7 +592,7 @@ Note: Account #0 (buyer) spent ~0.56 ETH total (0.5 ETH task payment locked in e
 **Standard flow (no audit):**
 1. **waiting**: Buyer creates task with POST /tasks (deploys Request contract with ETH locked in escrow, **automatically assigns** to executor using epsilon-greedy algorithm based on reputation).
 2. **completed**: Assigned executor automatically executes task and submits result with POST /tasks/:address/complete (calls contract.assignResult).
-3. **finalized**: Buyer finalizes task with POST /tasks/:address/finalize (calls contract.completeRequest to release escrow to seller).
+3. **finalized**: Buyer finalizes task with POST /tasks/:address/finalize (calls contract.completeRequest to release escrow to seller, awards +10 reputation to executor).
 
 Note: Manual assignment is still available via POST /tasks/:address/assign if needed.
 

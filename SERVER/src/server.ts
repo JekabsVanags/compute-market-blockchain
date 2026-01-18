@@ -697,6 +697,10 @@ app.post('/tasks/:address/finalize', async (req: Request, res: Response) => {
       []
     );
 
+    // Award reputation to executor for successful completion:
+    // Buyer is satisfied with the result, so executor gets +10 reputation.
+    await updateReputation(config, task.executor, task.address, 10);
+
     // Update task:
     task.status = 'finalized';
     task.paymentTransactionHash = completion.transactionHash;
