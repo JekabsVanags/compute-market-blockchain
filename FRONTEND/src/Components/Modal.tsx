@@ -115,8 +115,6 @@ const Modal: FC<ModalProps> = ({ isOpen, onClose, address }) => {
                   value={task.executorAccountIndex}
                 />
                 <Field label="Command hash" value={task.commandHash} />
-                <Field label="Stdout" value={task.stdout} />
-                <Field label="Stderr" value={task.stderr} />
               </Section>
 
               <Section title="Requirements">
