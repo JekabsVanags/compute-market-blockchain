@@ -1,8 +1,9 @@
 .root {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(2, 1fr);
+  grid-template-rows: repeat(1, 1fr);
   gap: 16px;
+  margin-bottom: 16px;
 }
 
 .cardRoot{
@@ -62,4 +63,8 @@
 
 .isNotActiveTab{
   background-color: #1a1a1a;
+}
+
+.inputMargin{
+  margin-bottom: 8px;
 }

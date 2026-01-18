@@ -24,18 +24,16 @@ export interface CreateTaskResponse {
   task: TaskData;
 }
 
-const postTask = async (
-  data: TaskPostData
-): Promise<CreateTaskResponse> => {
-  const response = await axiosClient.post('/tasks', data);
+const requestAudit = async (address: string, data: {reason: string}) => {
+  const response = await axiosClient.post(`/tasks/${address}/request-audit`, data);
   return response.data;
 };
 
-export const useTaskPost = () =>
+export const useRequestAudit = () =>
   useMutation<
-    CreateTaskResponse,                
-    AxiosError<ApiErrorResponse>,       
-    TaskPostData                      
+    void,        
+    AxiosError<ApiErrorResponse>,  
+    { address: string; data: {reason: string} } 
   >({
-    mutationFn: postTask,
-  });
+    mutationFn: ({ address, data }) => requestAudit(address, data),
+  })

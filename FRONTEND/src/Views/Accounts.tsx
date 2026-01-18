@@ -1,47 +1,48 @@
-import { useGetAccounts } from "QUERIES/accountsGet";
-import { useState } from "react";
-import { Link } from "react-router";
-
+import { useGetAccounts } from 'QUERIES/accountsGet';
+import { Link } from 'react-router';
+import styles from './accounts.module.scss';
 
 const Accounts = () => {
-  const [account, setAccount] = useState<string>("");
-  const {data: accountData, isLoading} = useGetAccounts();
-  
+  const { data: accountData, isLoading } = useGetAccounts();
+
   if (isLoading || !accountData) {
-    return <div>d</div>
+    return <div>Loading accounts…</div>;
   }
-  
+
   return (
     <div>
-      <div>
-        <h3>Select Account</h3>
-      </div>
-      <div>
-        <select
-          value={account}
-          onChange={(e) => setAccount(e.target.value)}
-        >
-          <option value="" disabled>
-            Select chain
-          </option>
+      <h3>Select Account</h3>
 
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Address</th>
+            <th>Balance (ETH)</th>
+            <th>Reputation</th>
+            <th />
+          </tr>
+        </thead>
+
+        <tbody>
           {accountData.accounts.map((account) => (
-            <option key={account.address} value={account.index}>
-              {account.address}
-            </option>
+            <tr key={account.address}>
+              <td className={styles.mono}>{account.address}</td>
+              <td>{account.balance}</td>
+              <td>{account.reputation}</td>
+              <td>
+                <Link
+                  to={`/account/${account.index}`}
+                  className={styles.selectButton}
+                >
+                  Select account
+                </Link>
+              </td>
+            </tr>
           ))}
-        </select>
-      </div>
-      <div style={{marginTop: 16}}>
-        {account !== "" && (
-          <button>
-            <Link to={`/account/${account}`}>Go to account</Link>
-          </button>
-          
-        )}
-      </div>
+        </tbody>
+      </table>
     </div>
-  )
-}
+  );
+};
 
 export default Accounts;

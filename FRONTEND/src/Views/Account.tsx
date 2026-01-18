@@ -59,7 +59,6 @@ const Account = () => {
         new Date(a.createdAt).getTime()
       )
   }, [tasksData, id])
-  
 
   if (isLoading || !accountData || !account || isTasksLoading || !accountTasks || !tasksData || !accountToDoTasks) {
     return <div>Loading data</div>
@@ -73,32 +72,34 @@ const Account = () => {
   console.log("ID", accountTasks);
   
   return (
-    <div className={style.root}>
-      <div className={style.cardRoot}>
-        <div>
-          <h3>Your account, id: {id}</h3>
+    <div>
+      <div className={style.root}>
+        <div className={style.cardRoot}>
+          <div>
+            <h3>Your account, id: {id}</h3>
+          </div>
+          <div>
+            <h5>Address: {account.address}</h5>
+            <h5>Balance: {account.balance} ETC</h5>
+            <h5>Reputation: {account.reputation}</h5>
+          </div>
         </div>
-        <div>
-          <h5>Address: {account.address}</h5>
-          <h5>Balance: {account.balance} ETC</h5>
+        <div className={style.cardRoot}>
+          <BuyerTaskPrompt id={id} />
         </div>
       </div>
-      <div className={style.cardRoot}>
-        <BuyerTaskPrompt id={id} />
-      </div>
-
       <div style={{gridColumn: "span 2"}} className={style.cardRoot}>
         <div className={style.tabButtonWrapper}>
           <button onClick={() => setTab('requested')} className={
             classNames(
               tab !== 'requested' && style.isNotActiveTab
             )
-          }>Requested</button>
+          }>Requested tasks</button>
           <button onClick={() => setTab('todo')} className={
             classNames(
               tab !== 'todo' && style.isNotActiveTab
             )
-          }>To Do</button>
+          }>Assigned tasks</button>
         </div>
         {tab === 'requested' && <RequestedTasks accountTasks={accountTasks} />}
         {tab === 'todo' && <ToDoTasks accountToDoTasks={accountToDoTasks} />}

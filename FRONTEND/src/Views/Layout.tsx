@@ -11,7 +11,7 @@ const Layout = ({ isHealthy }: { isHealthy: boolean }) => {
         {isHealthy && (
           <>
             <Link to="/accounts"><button>Accounts</button></Link>
-            <Link to="/tasks"><button>Tasks</button></Link>
+            <Link to="/tasks"><button>{"Tasks (Legacy)"}</button></Link>
           </>
         )}
       </div>
