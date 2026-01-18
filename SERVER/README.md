@@ -575,9 +575,9 @@ Note: Account #0 (buyer) spent ~0.56 ETH total (0.5 ETH task payment locked in e
 **Audit flow (buyer doesn't trust result):**
 1. **waiting** → **assigned** → **completed**: Same as standard flow.
 2. **audit_requested**: Buyer requests audit with POST /tasks/:address/request-audit (calls contract.requestAudit).
-3. **audit_passed** or **audit_failed**: Auditor verifies with POST /tasks/:address/submit-audit-result (calls contract.appointAuditor and contract.assignAuditResult).
-   - If results match: Executor gains +10 reputation, auditor gains +2.
-   - If results don't match: Executor loses -10 reputation, auditor gains +2.
+3. **audit_passed** or **audit_failed**: Auditor verifies with POST /tasks/:address/submit-audit-result (calls contract.appointAuditor, contract.assignAuditResult, and Reputation.award/penalize).
+   - If results match: Executor gains +10 reputation (on-chain), auditor gains +2 (on-chain).
+   - If results don't match: Executor loses -10 reputation (on-chain), auditor gains +2 (on-chain).
 4. **finalized**: Buyer finalizes task (only if audit passed, releases escrow).
 
 #### Quick test sequence (manual):
@@ -617,7 +617,7 @@ curl -X POST http://localhost:3000/tasks/$ADDRESS/finalize \
 
 # 6. Verify escrow payment:
 curl http://localhost:3000/accounts | jq '.accounts[0:2]'
-# Buyer should have spent ~0.56 ETH, seller should have gained ~0.5 ETH
+# Buyer should have spent ~0.56 ETH, seller should have gained ~0.5 ETH.
 ```
 
 **Or use the automated test scripts** (see their section above) for easier testing.
@@ -627,47 +627,38 @@ curl http://localhost:3000/accounts | jq '.accounts[0:2]'
 ```
 compute-market-blockchain/
 ├── BLOCKCHAIN/
-│   ├── contracts/                      # Solidity smart contracts.
+│   ├── contracts/                         # Solidity smart contracts.
+│   │   ├── Request.sol                    # Individual task contract with escrow.
+│   │   ├── Roles.sol                      # Role-based access control.
+│   │   ├── Reputation.sol                 # On-chain reputation system.
+│   │   └── AuditTaxRepository.sol         # Auditor payment pool.
 │   ├── scripts/
-│   │   └── deploy-core-contracts.ts    # Deploys Roles, Reputation, AuditTaxRepository.
+│   │   ├── deploy-core-contracts.ts       # Deploys Roles, Reputation, AuditTaxRepository.
+│   │   ├── grant-seller-roles.ts          # Grants SELLER_ROLE to accounts.
+│   │   └── authorize-request.ts           # Authorizes Request contracts for audits.
 │   └── hardhat.config.ts
 │
 └── SERVER/
     ├── src/
-    │   ├── blockchain-service.ts       # Blockchain interaction functions.
-    │   └── server.ts                   # REST API server.
-    ├── .env                            # Your configuration (git-ignored).
-    └── .env.example                    # Template.
+    │   ├── blockchain-service.ts          # Blockchain interaction functions.
+    │   └── server.ts                      # REST API server.
+    ├── test-full-workflow.sh              # Automated escrow test.
+    ├── test-audit-flow.sh                 # Automated audit & reputation test.
+    ├── test-reputation-persistence.sh     # Verify reputation persists on blockchain.
+    ├── .env                               # Your configuration (git-ignored).
+    └── .env.example                       # Template.
 ```
 
 ## Notes:
 
 **Restarting the blockchain:** When you restart the Hardhat node (Ctrl+C and restart), you must:
-1. Re-deploy core contracts (step 3).
-2. Update addresses in `.env` (step 4).
+1. Re-deploy core contracts (step 3 in Setup).
+2. Update addresses in `.env` (step 4 in Setup).
+3. Restart the server.
 
-The local blockchain resets when you restart it (all accounts go back to 10,000 ETH).
+The local blockchain resets completely when you restart it (all accounts go back to 10,000 ETH, reputation scores reset).
 
-## Workflow summary:
-
-```bash
-# Terminal 1 – start blockchain (leave running):
-cd BLOCKCHAIN
-npx hardhat node
-
-# Terminal 2 – deploy core contracts (once per blockchain restart):
-cd BLOCKCHAIN
-npx hardhat run scripts/deploy-core-contracts.ts --network localhost
-# Copy the addresses for environment variables.
-
-# Terminal 2 – configure server:
-cd SERVER
-cp .env.example .env
-# Edit .env and paste addresses.
-
-# Terminal 2 – start REST API server:
-cd SERVER
-npm start
-# Server runs on: http://localhost:3000
-# Test with: curl http://localhost:3000/health
-```
+**Testing:** After setup, use the automated test scripts (see "Automated unit tests" section above):
+- `./test-full-workflow.sh` - Validates escrow payments.
+- `./test-audit-flow.sh` - Validates audit and reputation system.
+- `./test-reputation-persistence.sh` - Confirms reputation is stored on blockchain.
