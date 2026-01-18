@@ -145,6 +145,9 @@ cd SERVER
 
 # Test 3 – reputation persistence (run after test 2):
 ./test-reputation-persistence.sh
+
+# Test 4 – auto-assignment with epsilon-greedy:
+./test-auto-assign.sh
 ```
 
 These scripts automatically:
@@ -153,6 +156,7 @@ These scripts automatically:
 - Validate balances and escrow payments.
 - Verify reputation changes on blockchain.
 - Confirm reputation persists (not lost on server restart).
+- Test auto-assignment algorithm (epsilon-greedy with various ε values).
 
 **Note:** These scripts require the blockchain and server to be running (see steps 1-4 above).
 
@@ -365,6 +369,43 @@ Expected response example:
 }
 ```
 
+**POST /tasks/:address/auto-assign** - automatically assign task based on reputation:
+Uses epsilon-greedy algorithm to select seller – with probability ε (epsilon), selects random seller; with probability (1 - ε), selects seller with highest reputation.
+
+```bash
+curl -X POST http://localhost:3000/tasks/0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9/auto-assign \
+  -H "Content-Type: application/json" \
+  -d '{
+    "epsilon": 0.1,
+    "sellerAccountIndices": [1, 2]
+  }'
+```
+
+Parameters (both optional):
+- `epsilon`: Probability of random selection p in [0; 1]. Default: 0.1 (10% random seller, 90% top seller by reputation).
+- `sellerAccountIndices`: Array of seller account indices to consider. Default: [1, 2].
+
+Expected response example:
+```json
+{
+  "success": true,
+  "selectedSeller": {
+    "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "accountIndex": 1,
+    "reputation": 10,
+    "selectionMethod": "highest_reputation"
+  },
+  "task": {
+    "address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+    "status": "waiting",
+    "executor": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "executorAccountIndex": 1
+  }
+}
+```
+
+Note: The algorithm queries on-chain reputation scores for each seller and selects based on epsilon-greedy policy. This prevents reputation monopolies while still rewarding high-reputation sellers.
+
 **POST /tasks/:address/complete** - seller completes task with result:
 ```bash
 curl -X POST http://localhost:3000/tasks/0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9/complete \
@@ -568,7 +609,7 @@ Note: Account #0 (buyer) spent ~0.56 ETH total (0.5 ETH task payment locked in e
 
 **Standard flow (no audit):**
 1. **waiting**: Buyer creates task with POST /tasks (deploys Request contract with ETH locked in escrow).
-2. **assigned** (optional): Seller claims task with POST /tasks/:address/assign (calls contract.appointExecutor).
+2. **assigned** (optional): Seller claims task with POST /tasks/:address/assign (manual) OR POST /tasks/:address/auto-assign (automatic reputation-based) - calls contract.appointExecutor.
 3. **completed**: Seller completes task with POST /tasks/:address/complete (calls contract.assignResult).
 4. **finalized**: Buyer finalizes task with POST /tasks/:address/finalize (calls contract.completeRequest to release escrow to seller).
 
@@ -645,6 +686,7 @@ compute-market-blockchain/
     ├── test-full-workflow.sh              # Automated escrow test.
     ├── test-audit-flow.sh                 # Automated audit & reputation test.
     ├── test-reputation-persistence.sh     # Verify reputation persists on blockchain.
+    ├── test-auto-assign.sh                # Automated epsilon-greedy assignment test.
     ├── .env                               # Your configuration (git-ignored).
     └── .env.example                       # Template.
 ```
@@ -662,3 +704,4 @@ The local blockchain resets completely when you restart it (all accounts go back
 - `./test-full-workflow.sh` - Validates escrow payments.
 - `./test-audit-flow.sh` - Validates audit and reputation system.
 - `./test-reputation-persistence.sh` - Confirms reputation is stored on blockchain.
+- `./test-auto-assign.sh` - Tests epsilon-greedy automatic assignment algorithm.

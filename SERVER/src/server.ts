@@ -27,7 +27,8 @@ import {
   BlockchainConfig,
   callRequestContractMethod,
   updateReputation,
-  getReputation
+  getReputation,
+  selectExecutorEpsilonGreedy
 } from './blockchain-service';
 
 // Load environment variables from .env file:
@@ -401,6 +402,90 @@ app.post('/tasks/:address/assign', async (req: Request, res: Response) => {
 
     res.status(500).json({
       error: 'Failed to assign task!',
+      details: error.message
+    });
+  }
+});
+
+// POST /tasks/:address/auto-assign - Automatically assign task to seller based on reputation:
+// Uses epsilon-greedy algorithm to select seller (highest reputation with probability 1 - ε, random with probability ε).
+// Request body (both fields optional): { "epsilon": 0.1, "sellerAccountIndices": [1, 2] }
+// Response: { "success": true, "selectedSeller": { ... }, "task": { ... } }
+app.post('/tasks/:address/auto-assign', async (req: Request, res: Response) => {
+  try {
+    const { address } = req.params;
+    const { epsilon, sellerAccountIndices } = req.body;
+
+    // Default values:
+    const epsilonValue = epsilon !== undefined ? epsilon : 0.1; // 10% random seller, 90% top seller by reputation.
+    const sellers = sellerAccountIndices || [1, 2]; // Default to accounts 1 and 2 (granted SELLER_ROLE in tests).
+
+    // Validate epsilon:
+    if (epsilonValue < 0 || epsilonValue > 1) {
+      return res.status(400).json({
+        error: 'Epsilon must be between 0 and 1!'
+      });
+    }
+
+    // Find task:
+    const task = tasks.get(address);
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found!'
+      });
+    }
+
+    // Validate status (can only assign tasks that are waiting):
+    if (task.status !== 'waiting') {
+      return res.status(400).json({
+        error: `Task cannot be assigned, current status: ${task.status}`
+      });
+    }
+
+    // Prevent re-assignment if already assigned:
+    if (task.executor) {
+      return res.status(400).json({
+        error: 'Task already assigned to another executor!'
+      });
+    }
+
+    // Select executor using epsilon-greedy algorithm:
+    const config = getBlockchainConfig(0); // Use admin account for querying.
+    const selectedSeller = await selectExecutorEpsilonGreedy(config, sellers, epsilonValue);
+
+    // Call blockchain contract to appoint executor (uses buyer's account as admin):
+    const buyerConfig = getBlockchainConfig(task.ownerAccountIndex);
+    await callRequestContractMethod(
+      task.address,
+      buyerConfig,
+      'appointExecutor',
+      [selectedSeller.address]
+    );
+
+    // Update task (assign executor but keep status as 'waiting'):
+    task.executor = selectedSeller.address;
+    task.executorAccountIndex = selectedSeller.accountIndex;
+
+    res.json({
+      success: true,
+      selectedSeller: {
+        address: selectedSeller.address,
+        accountIndex: selectedSeller.accountIndex,
+        reputation: selectedSeller.reputation,
+        selectionMethod: Math.random() < epsilonValue ? 'random' : 'highest_reputation'
+      },
+      task: {
+        address: task.address,
+        status: task.status,
+        executor: task.executor,
+        executorAccountIndex: task.executorAccountIndex
+      }
+    });
+  } catch (error: any) {
+    console.error('Error auto-assigning task:', error);
+
+    res.status(500).json({
+      error: 'Failed to auto-assign task!',
       details: error.message
     });
   }
@@ -877,6 +962,7 @@ app.listen(PORT, () => {
   console.log(`  GET  /tasks - List all tasks.`);
   console.log(`  GET  /tasks/:address - Get specific task details.`);
   console.log(`  POST /tasks/:address/assign - Seller claims task.`);
+  console.log(`  POST /tasks/:address/auto-assign - Auto-assign task based on reputation.`);
   console.log(`  POST /tasks/:address/complete - Seller completes task.`);
   console.log(`  POST /tasks/:address/request-audit - Buyer requests audit.`);
   console.log(`  POST /tasks/:address/submit-audit-result - Auditor submits verification.`);

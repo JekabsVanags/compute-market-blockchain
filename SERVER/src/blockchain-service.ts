@@ -325,3 +325,48 @@ export async function getReputation(
   // Convert BigInt to number:
   return Number(reputation);
 }
+
+/**
+ * Select executor using epsilon-greedy algorithm based on reputation scores:
+ * @param config - Blockchain configuration.
+ * @param sellerAccountIndices - Array of account indices to consider (e.g., [1, 2]).
+ * @param epsilon - Probability of random selection (default 0.1 = 10% random, 90% top seller by reputation).
+ * @returns Selected executor's account index and address.
+ */
+export async function selectExecutorEpsilonGreedy(
+  config: BlockchainConfig,
+  sellerAccountIndices: number[],
+  epsilon: number = 0.1
+): Promise<{ accountIndex: number; address: string; reputation: number }> {
+  if (sellerAccountIndices.length === 0) {
+    throw new Error('No sellers available for assignment!');
+  }
+
+  // Get all accounts to map indices to addresses:
+  const accounts = await getHardhatAccounts(config.rpcUrl);
+
+  // Query reputation for each seller:
+  const sellersWithReputation = await Promise.all(
+    sellerAccountIndices.map(async (index) => {
+      const account = accounts[index];
+      const reputation = await getReputation(config, account.address);
+      return {
+        accountIndex: index,
+        address: account.address,
+        reputation
+      };
+    })
+  );
+
+  // Epsilon-greedy selection:
+  if (Math.random() < epsilon) {
+    // Random selection:
+    const randomIndex = Math.floor(Math.random() * sellersWithReputation.length);
+    return sellersWithReputation[randomIndex];
+  } else {
+    // Select seller with highest reputation:
+    return sellersWithReputation.reduce((best, current) =>
+      current.reputation > best.reputation ? current : best
+    );
+  }
+}
