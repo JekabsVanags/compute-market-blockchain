@@ -24,7 +24,8 @@ import {
   checkConnection,
   getHardhatAccounts,
   sendPayment,
-  BlockchainConfig
+  BlockchainConfig,
+  callRequestContractMethod
 } from './blockchain-service';
 
 // Load environment variables from .env file:
@@ -374,6 +375,15 @@ app.post('/tasks/:address/assign', async (req: Request, res: Response) => {
     const config = getBlockchainConfig(sellerAccountIndex);
     const sellerAddress = (await getHardhatAccounts(config.rpcUrl))[sellerAccountIndex].address;
 
+    // Call blockchain contract to appoint executor (uses buyer's account as admin):
+    const buyerConfig = getBlockchainConfig(task.ownerAccountIndex);
+    await callRequestContractMethod(
+      task.address,
+      buyerConfig,
+      'appointExecutor',
+      [sellerAddress]
+    );
+
     // Update task (assign executor but keep status as 'waiting'):
     // Status only changes to 'completed' when seller submits result.
     task.executor = sellerAddress;
@@ -459,6 +469,20 @@ app.post('/tasks/:address/complete', async (req: Request, res: Response) => {
       }
     }
 
+    // Prepare result hash for blockchain (use stdout if available, otherwise full result):
+    const resultForHash = hasStructuredFormat && stdout ? stdout : result || '';
+    const resultHash = crypto.createHash('sha256').update(resultForHash).digest();
+    const resultHashHex = '0x' + resultHash.toString('hex');
+
+    // Call blockchain contract to submit result (uses executor's account):
+    const executorConfig = getBlockchainConfig(sellerAccountIndex);
+    await callRequestContractMethod(
+      task.address,
+      executorConfig,
+      'assignResult',
+      [resultHashHex]
+    );
+
     // Update task status and result (supports both legacy and structured formats):
     task.status = 'completed';
     task.completedAt = new Date().toISOString();
@@ -539,24 +563,25 @@ app.post('/tasks/:address/finalize', async (req: Request, res: Response) => {
       });
     }
 
-    // Send payment from buyer to seller:
+    // Call blockchain contract to complete request and release escrow payment:
+    // This releases the ETH that was locked in the contract during task creation.
     const config = getBlockchainConfig(task.ownerAccountIndex);
-    const payment = await sendPayment(
-      config.rpcUrl,
-      task.ownerAccountIndex,
-      task.executor,
-      task.price
+    const completion = await callRequestContractMethod(
+      task.address,
+      config,
+      'completeRequest',
+      []
     );
 
     // Update task:
     task.status = 'finalized';
-    task.paymentTransactionHash = payment.transactionHash;
+    task.paymentTransactionHash = completion.transactionHash;
     task.finalizedAt = new Date().toISOString();
 
     res.json({
       success: true,
-      paymentTransactionHash: payment.transactionHash,
-      paymentBlockNumber: payment.blockNumber,
+      paymentTransactionHash: completion.transactionHash,
+      paymentBlockNumber: completion.blockNumber,
       task: {
         address: task.address,
         status: task.status,
@@ -606,6 +631,15 @@ app.post('/tasks/:address/request-audit', async (req: Request, res: Response) =>
         error: `Task cannot be audited (current status: ${task.status}). Only completed tasks can be audited!`
       });
     }
+
+    // Call blockchain contract to request audit:
+    const config = getBlockchainConfig(task.ownerAccountIndex);
+    await callRequestContractMethod(
+      task.address,
+      config,
+      'requestAudit',
+      [reason]
+    );
 
     // Mark task as audit requested:
     task.status = 'audit_requested';
@@ -712,6 +746,29 @@ app.post('/tasks/:address/submit-audit-result', async (req: Request, res: Respon
     if (zipData) {
       task.auditorZipData = zipData;
     }
+
+    // Call blockchain contract to appoint auditor (buyer appoints):
+    const buyerConfig = getBlockchainConfig(task.ownerAccountIndex);
+    await callRequestContractMethod(
+      task.address,
+      buyerConfig,
+      'appointAuditor',
+      [auditorAddress]
+    );
+
+    // Prepare auditor's result hash for blockchain (use stdout if available):
+    const auditorResultForHash = hasStructuredFormat && stdout ? stdout : result || '';
+    const auditorResultHash = crypto.createHash('sha256').update(auditorResultForHash).digest();
+    const auditorResultHashHex = '0x' + auditorResultHash.toString('hex');
+
+    // Call blockchain contract to submit audit result (auditor submits):
+    const auditorConfig = getBlockchainConfig(auditorAccountIndex);
+    await callRequestContractMethod(
+      task.address,
+      auditorConfig,
+      'assignAuditResult',
+      [auditorResultHashHex]
+    );
 
     // Compare auditor's result with executor's result:
     // Prefer structured comparison if both have structured data, otherwise compare strings:

@@ -1,7 +1,17 @@
 #!/bin/bash
 # Test script for audit and reputation endpoints:
 
+set -e # Exit on any error.
+
 echo "Testing audit and reputation endpoints..."
+echo ""
+
+# Step 0 – grant SELLER roles:
+echo "0. Granting SELLER_ROLE to accounts 1 and 2..."
+cd ../BLOCKCHAIN
+npx hardhat run scripts/grant-seller-roles.ts --network localhost > /dev/null
+cd ../SERVER
+echo "✓ Roles granted."
 echo ""
 
 echo "1. Creating task..."
@@ -11,6 +21,13 @@ RESPONSE=$(curl -s -X POST http://localhost:3000/tasks \
 
 ADDRESS=$(echo $RESPONSE | grep -o '"address":"0x[^"]*"' | cut -d'"' -f4)
 echo "Task created at: $ADDRESS"
+
+# Authorize the request contract for audit functionality:
+echo "1b. Authorizing request contract..."
+cd ../BLOCKCHAIN
+REQUEST_ADDRESS="$ADDRESS" npx hardhat run scripts/authorize-request.ts --network localhost 2>/dev/null
+cd ../SERVER
+echo "✓ Authorized."
 echo ""
 
 echo "2. Assigning task to executor (account #1)..."
@@ -22,7 +39,7 @@ echo ""
 echo "3. Completing task (executor submits result '10')..."
 curl -s -X POST http://localhost:3000/tasks/$ADDRESS/complete \
   -H "Content-Type: application/json" \
-  -d '{"result": "10", "accountIndex": 1}' | jq '.'
+  -d '{"stdout": "10", "stderr": "", "exitCode": 0, "accountIndex": 1}' | jq '.'
 echo ""
 
 echo "4. Requesting audit (buyer doesn't trust result)..."
@@ -34,7 +51,7 @@ echo ""
 echo "5. Submitting audit result (auditor account #2 confirms '10')..."
 curl -s -X POST http://localhost:3000/tasks/$ADDRESS/submit-audit-result \
   -H "Content-Type: application/json" \
-  -d '{"result": "10", "accountIndex": 2}' | jq '.'
+  -d '{"stdout": "10", "stderr": "", "exitCode": 0, "accountIndex": 2}' | jq '.'
 echo ""
 
 echo "6. Checking executor reputation (should be +10)..."

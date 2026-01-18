@@ -8,6 +8,7 @@
 import { ethers } from 'ethers';
 // The compiled Request contract (ABI + bytecode):
 import RequestArtifact from '../../BLOCKCHAIN/artifacts/contracts/Request.sol/Request.json';
+import AuditTaxRepositoryArtifact from '../../BLOCKCHAIN/artifacts/contracts/AuditTaxRepository.sol/AuditTaxRepository.json';
 
 // Configuration needed to connect to blockchain and deploy contracts:
 export interface BlockchainConfig {
@@ -35,6 +36,36 @@ export function createProvider(rpcUrl: string) {
 // Creates a wallet that can sign transactions (needed to deploy contracts):
 export function createWallet(privateKey: string, provider: ethers.JsonRpcProvider) {
   return new ethers.Wallet(privateKey, provider);
+}
+
+/**
+ * Call a method on a deployed Request contract
+ * @param contractAddress - Address of the deployed Request contract
+ * @param config - Blockchain configuration
+ * @param methodName - Name of the contract method to call
+ * @param params - Parameters to pass to the method
+ * @returns Transaction hash and block number
+ */
+export async function callRequestContractMethod(
+  contractAddress: string,
+  config: BlockchainConfig,
+  methodName: string,
+  params: any[] = []
+): Promise<{ transactionHash: string; blockNumber: number }> {
+  const provider = createProvider(config.rpcUrl);
+  const wallet = createWallet(config.privateKey, provider);
+
+  // Create contract instance at the deployed address:
+  const contract = new ethers.Contract(contractAddress, RequestArtifact.abi, wallet);
+
+  // Call the method and wait for transaction to be mined:
+  const tx = await contract[methodName](...params);
+  const receipt = await tx.wait();
+
+  return {
+    transactionHash: tx.hash,
+    blockNumber: receipt.blockNumber
+  };
 }
 
 // Deploys a new Request contract to the blockchain:
@@ -97,6 +128,9 @@ export async function deployRequestContract(
   const owner = await (contract as any).owner();
   const storedCommandHash = await (contract as any).commandHash();
 
+  // Note: Request contracts need to be authorized in AuditTaxRepository before audit functionality works.
+  // For MVP, this is done via the deploy script or manually.
+  // In production, this could be automated by the AuditTaxRepository owner after deployment.
   return {
     address,
     transactionHash: deploymentTx.hash,

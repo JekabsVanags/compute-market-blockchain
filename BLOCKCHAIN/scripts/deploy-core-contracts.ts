@@ -56,10 +56,11 @@ async function main() {
   console.log("");
 
   // 3. Deploy AuditTaxRepository contract:
-  console.log("Deploying AuditTaxRepository contract...");
+  console.log("Deploying AuditTaxRepository contract (starts with 10 ETH for auditor payments)...");
 
   const AuditTaxRepositoryFactory = await ethers.getContractFactory("AuditTaxRepository");
-  const auditTaxRepository = await AuditTaxRepositoryFactory.deploy();
+  // Start with 10 ETH so auditors can be paid before enough audit tax accumulate:
+  const auditTaxRepository = await AuditTaxRepositoryFactory.deploy({ value: ethers.parseEther("10") });
   await auditTaxRepository.waitForDeployment();
 
   const auditTaxRepositoryAddress = await auditTaxRepository.getAddress();

@@ -100,7 +100,7 @@ Deploying Reputation contract...
    (depends on Roles at 0x5FbDB2315678afecb367f032d93F642f64180aa3 )
 Reputation deployed to: 0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
 
-Deploying AuditTaxRepository contract...
+Deploying AuditTaxRepository contract (starts with 10 ETH for auditor payments)...
 AuditTaxRepository deployed to: 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
 
 Core contracts deployed!
@@ -129,6 +129,28 @@ ROLES_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
 REPUTATION_CONTRACT_ADDRESS=0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0
 AUDIT_TAX_REPOSITORY_ADDRESS=0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9
 ```
+
+## Automated unit tests:
+
+The easiest way to test the system is with the automated test scripts:
+
+```bash
+cd SERVER
+
+# Test 1 – full workflow with escrow validation:
+./test-full-workflow.sh
+
+# Test 2 – audit and reputation flow:
+./test-audit-flow.sh
+```
+
+Both scripts automatically:
+- Grant SELLER_ROLE to accounts 1 and 2.
+- Execute the complete workflow.
+- Validate balances and escrow payments.
+- Verify reputation changes.
+
+**Note:** These scripts require the blockchain and server to be running (see steps 1-4 above).
 
 ## Using the server:
 
@@ -536,55 +558,65 @@ Expected response example:
 ]
 ```
 
-Note: Account #0 (buyer) spent ~1.06 ETH total (0.5555 ETH for task, plus gas fees). Account #1 (seller) received exactly 0.5 ETH payment.
+Note: Account #0 (buyer) spent ~0.56 ETH total (0.5 ETH task payment locked in escrow + 0.0556 ETH audit tax + gas fees). Account #1 (seller) received exactly 0.5 ETH from escrow release.
 
 #### Task lifecycle:
 
 **Standard flow (no audit):**
-1. **waiting**: Buyer creates task with POST /tasks (deploys Request contract with ETH payment).
-2. **assigned** (optional): Seller claims task with POST /tasks/:address/assign.
-3. **completed**: Seller completes task with POST /tasks/:address/complete (submits result).
-4. **finalized**: Buyer finalizes task with POST /tasks/:address/finalize (ETH sent to seller).
+1. **waiting**: Buyer creates task with POST /tasks (deploys Request contract with ETH locked in escrow).
+2. **assigned** (optional): Seller claims task with POST /tasks/:address/assign (calls contract.appointExecutor).
+3. **completed**: Seller completes task with POST /tasks/:address/complete (calls contract.assignResult).
+4. **finalized**: Buyer finalizes task with POST /tasks/:address/finalize (calls contract.completeRequest to release escrow to seller).
 
 **Audit flow (buyer doesn't trust result):**
 1. **waiting** → **assigned** → **completed**: Same as standard flow.
-2. **audit_requested**: Buyer requests audit with POST /tasks/:address/request-audit.
-3. **audit_passed** or **audit_failed**: Auditor verifies with POST /tasks/:address/submit-audit-result.
+2. **audit_requested**: Buyer requests audit with POST /tasks/:address/request-audit (calls contract.requestAudit).
+3. **audit_passed** or **audit_failed**: Auditor verifies with POST /tasks/:address/submit-audit-result (calls contract.appointAuditor and contract.assignAuditResult).
    - If results match: Executor gains +10 reputation, auditor gains +2.
    - If results don't match: Executor loses -10 reputation, auditor gains +2.
-4. **finalized**: Buyer finalizes task (only if audit passed).
+4. **finalized**: Buyer finalizes task (only if audit passed, releases escrow).
 
-#### Quick test sequence:
+#### Quick test sequence (manual):
 
-To test the complete workflow, run these commands in order (replace `ADDRESS` with your task address from step 2):
+To test the complete workflow manually, run these commands in order:
 
 ```bash
+# 0. Grant SELLER_ROLE to accounts 1 and 2 (required for assign/complete):
+cd BLOCKCHAIN
+npx hardhat run scripts/grant-seller-roles.ts --network localhost
+cd ../SERVER
+
 # 1. Health check:
 curl http://localhost:3000/health
 
 # 2. Create task (save the returned address):
-curl -X POST http://localhost:3000/tasks \
+RESPONSE=$(curl -s -X POST http://localhost:3000/tasks \
   -H "Content-Type: application/json" \
-  -d '{"code": "import numpy as np\nresult = np.array([1,2,3]).sum()\nprint(result)", "price": "0.5", "accountIndex": 0}'
+  -d '{"code": "print(5+5)", "price": "0.5", "accountIndex": 0}')
+ADDRESS=$(echo $RESPONSE | jq -r '.task.address')
+echo "Task address: $ADDRESS"
 
-# 3. Assign task to seller (optional, replace ADDRESS):
-curl -X POST http://localhost:3000/tasks/ADDRESS/assign \
+# 3. Assign task to seller:
+curl -X POST http://localhost:3000/tasks/$ADDRESS/assign \
   -H "Content-Type: application/json" \
   -d '{"accountIndex": 1}'
 
-# 4. Complete task (replace ADDRESS):
-curl -X POST http://localhost:3000/tasks/ADDRESS/complete \
+# 4. Complete task:
+curl -X POST http://localhost:3000/tasks/$ADDRESS/complete \
   -H "Content-Type: application/json" \
-  -d '{"result": "6", "accountIndex": 1}'
+  -d '{"stdout": "10", "stderr": "", "exitCode": 0, "accountIndex": 1}'
 
-# 5. Finalize task (replace ADDRESS):
-curl -X POST http://localhost:3000/tasks/ADDRESS/finalize \
+# 5. Finalize task (releases escrow):
+curl -X POST http://localhost:3000/tasks/$ADDRESS/finalize \
   -H "Content-Type: application/json" \
   -d '{}'
 
-# 6. Verify payment:
+# 6. Verify escrow payment:
 curl http://localhost:3000/accounts | jq '.accounts[0:2]'
+# Buyer should have spent ~0.56 ETH, seller should have gained ~0.5 ETH
 ```
+
+**Or use the automated test scripts** (see their section above) for easier testing.
 
 ## Project structure:
 
